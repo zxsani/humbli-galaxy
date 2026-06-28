@@ -2637,8 +2637,7 @@ fileInput.addEventListener('change', () => {
 // Standard Clerk vanilla-JS pattern — verify against Clerk's current
 // quickstart docs; not tested against a live Clerk instance.
 async function getSessionToken() {
-  return 'demo';
-}
+  if (!window.Clerk) {
     throw new Error('Sign-in is not configured yet.');
   }
   await window.Clerk.load();
