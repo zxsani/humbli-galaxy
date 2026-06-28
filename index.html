@@ -329,9 +329,20 @@
 </style>
 </head>
 <body>
-  <div id="manual-signin" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;background:#F5A623;color:#000;padding:12px 24px;border-radius:8px;font-family:Georgia,serif;cursor:pointer;font-size:16px;" onclick="window.Clerk.openSignIn()">
-  Sign In to HumbliFX
-  </div>
+  <script>
+window.addEventListener('load', function() {
+  var checkClerk = setInterval(function() {
+    if (window.Clerk && window.Clerk.openSignIn) {
+      clearInterval(checkClerk);
+      var btn = document.createElement('div');
+      btn.textContent = 'Sign In to HumbliFX';
+      btn.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;background:#F5A623;color:#000;padding:12px 24px;border-radius:8px;font-family:Georgia,serif;cursor:pointer;font-size:16px;';
+      btn.onclick = function() { window.Clerk.openSignIn(); };
+      document.body.appendChild(btn);
+    }
+  }, 500);
+});
+</script>
 
 <!-- Fade overlay for transitions -->
 <div id="fadeOverlay"></div>
