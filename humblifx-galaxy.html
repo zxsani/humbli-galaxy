@@ -1,0 +1,4305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>HumbliFX — The Institution</title>
+
+
+<style>
+  :root {
+    --navy: #04060c;
+    --gold: #F5A623;
+    --amber: #E8893A;
+    --text: #E8E8F0;
+    --muted: #6B7280;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--navy);
+    overflow: hidden;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  body:active { cursor: grabbing; }
+  body.pointer { cursor: pointer; }
+
+  canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
+
+  /* ── BLACK FADE OVERLAY (for transitions) ── */
+  #fadeOverlay {
+    position: fixed; inset: 0; z-index: 100; pointer-events: none;
+    background: #04060c; opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  #fadeOverlay.active { opacity: 1; }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    padding: 18px 24px; display: flex; justify-content: space-between;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(4,6,12,0.9) 0%, transparent 100%);
+  }
+  .logo { font-size: 18px; color: var(--gold); letter-spacing: 0.1em; }
+  .location { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+
+  /* ── ACTIVITY TICKER ── */
+  .activity-ticker {
+    position: fixed; top: 44px; right: 18px; z-index: 19;
+    pointer-events: none;
+    font-family: 'Georgia', serif; font-size: 11px;
+    color: rgba(245,208,138,0.75); letter-spacing: 0.04em;
+    text-align: right; max-width: 46vw;
+    text-shadow: 0 0 10px rgba(245,166,35,0.25);
+    transition: opacity 0.6s;
+  }
+  .activity-ticker .tick-sep { opacity: 0.4; margin: 0 6px; }
+  .activity-ticker .tick-num { color: var(--gold); font-weight: bold; }
+  .activity-ticker .tick-num.bumped { animation: tickBump 0.6s ease; }
+  @keyframes tickBump {
+    0% { color: #FFF3D0; text-shadow: 0 0 14px rgba(255,215,0,0.9); }
+    100% { color: var(--gold); text-shadow: 0 0 10px rgba(245,166,35,0.25); }
+  }
+  @media (max-width: 600px) {
+    .activity-ticker { font-size: 9px; top: 40px; right: 10px; max-width: 60vw; }
+  }
+
+  /* ── FLOOR live-feed panel ── */
+  .floor-feed {
+    position: fixed; left: 16px; bottom: 96px; z-index: 18;
+    width: min(320px, 70vw); pointer-events: none;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .floor-feed .ff-line {
+    color: rgba(245,208,138,0.0);
+    border-left: 2px solid rgba(245,166,35,0.4);
+    padding: 3px 8px; background: rgba(10,14,26,0.5);
+    transform: translateX(-8px); transition: opacity 0.4s, transform 0.4s;
+  }
+  .floor-feed .ff-line.shown { color: rgba(245,208,138,0.85); transform: translateX(0); }
+  @media (max-width: 600px) {
+    .floor-feed { bottom: 150px; font-size: 9px; width: 64vw; }
+  }
+
+  /* ── LOUNGE spotlight card ── */
+  .spotlight-card {
+    position: fixed; right: 16px; bottom: 96px; z-index: 18;
+    width: min(280px, 72vw); pointer-events: none;
+    background: rgba(10,14,26,0.9); border: 1px solid rgba(245,166,35,0.4);
+    border-radius: 10px; padding: 14px 16px;
+    backdrop-filter: blur(10px);
+    opacity: 0; transform: translateY(10px); transition: opacity 0.6s, transform 0.6s;
+    box-shadow: 0 0 28px rgba(245,166,35,0.18);
+  }
+  .spotlight-card.visible { opacity: 1; transform: translateY(0); }
+  .spotlight-card .sc-name { font-family: 'Georgia', serif; font-size: 16px; color: var(--gold); margin-bottom: 2px; }
+  .spotlight-card .sc-rank { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin-bottom: 6px; }
+  .spotlight-card .sc-charts { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .spotlight-card .sc-insight { font-size: 12px; color: var(--text); line-height: 1.5; }
+  @media (max-width: 600px) {
+    .spotlight-card { bottom: 150px; width: 70vw; }
+  }
+
+  /* ── BACK BUTTON ── */
+  .back-btn {
+    position: fixed; top: 16px; left: 16px; z-index: 25;
+    background: rgba(10,14,26,0.7); border: 1px solid rgba(245,166,35,0.2);
+    color: var(--gold); padding: 6px 14px; border-radius: 8px;
+    font-size: 12px; cursor: pointer; letter-spacing: 0.06em;
+    font-family: 'Georgia', serif; backdrop-filter: blur(10px);
+    display: none;
+  }
+  .back-btn.visible { display: block; }
+
+  /* ── UPLOAD OVERLAY (only in Floor) ── */
+  .upload-overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none; opacity: 0; transition: opacity 0.5s;
+  }
+  .upload-overlay.active { opacity: 1; pointer-events: all; }
+  .upload-zone {
+    width: min(480px, 85vw); padding: 40px 28px;
+    border: 2px dashed rgba(245,166,35,0.3); border-radius: 18px;
+    text-align: center; cursor: pointer;
+    background: rgba(10,14,26,0.7); backdrop-filter: blur(12px);
+    transition: border-color 0.4s, box-shadow 0.4s;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--gold);
+    box-shadow: 0 0 50px rgba(245,166,35,0.12);
+  }
+  .upload-icon { font-size: 40px; display: block; margin-bottom: 8px; }
+  .upload-title { font-size: 19px; color: var(--gold); letter-spacing: 0.07em; }
+  .upload-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  #fileInput { display: none; }
+
+  /* ── PROCESSING TEXT ── */
+  .processing-text {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 15; pointer-events: none; opacity: 0; transition: opacity 0.5s;
+    text-align: center;
+  }
+  .processing-text.visible { opacity: 1; }
+  .processing-text .phase {
+    display: block; font-size: 15px; color: var(--gold); letter-spacing: 0.08em;
+    animation: phaseFade 2s ease-in-out infinite;
+  }
+  @keyframes phaseFade { 0%,100%{opacity:0.4;} 50%{opacity:1;} }
+
+  /* ── RESPONSE PANELS ── */
+  .response-container {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 15;
+    opacity: 0; transform: translateY(30px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+    padding: 18px 20px 28px;
+    background: linear-gradient(to top, rgba(4,6,12,0.95) 60%, transparent);
+    max-height: 55vh; overflow-y: auto; pointer-events: none;
+  }
+  .response-container.visible { opacity: 1; transform: translateY(0); pointer-events: all; }
+  .response-panel {
+    background: rgba(255,255,255,0.025); border: 1px solid rgba(245,166,35,0.15);
+    border-radius: 10px; padding: 14px 18px; margin-bottom: 8px;
+    opacity: 0; transform: translateY(8px);
+    transition: all 0.5s ease;
+  }
+  .response-panel.revealed { opacity: 1; transform: translateY(0); }
+  .response-panel .plabel-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .response-panel .plabel { font-size: 9px; color: var(--amber); letter-spacing: 0.1em; text-transform: uppercase; }
+  .response-panel .pcontent { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .response-panel .pcontent.gold { color: var(--gold); font-size: 15px; margin-top: 4px; display: block; }
+  .confidence-badge {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    padding: 3px 9px;
+    border-radius: 12px;
+    border: 1px solid rgba(245,166,35,0.35);
+    color: var(--gold);
+    background: rgba(245,166,35,0.08);
+    white-space: nowrap;
+    flex: none;
+  }
+  .confidence-badge.tier-high { border-color: rgba(255,215,0,0.6); color: #FFD700; background: rgba(255,215,0,0.1); }
+  .confidence-badge.tier-mid { border-color: rgba(245,166,35,0.5); color: var(--gold); background: rgba(245,166,35,0.1); }
+  .confidence-badge.tier-low { border-color: rgba(232,137,58,0.4); color: var(--amber); background: rgba(232,137,58,0.08); }
+  .confidence-badge.tier-unclear { border-color: rgba(107,114,128,0.5); color: var(--muted); background: rgba(107,114,128,0.08); }
+  .response-actions { display: flex; gap: 8px; margin-top: 10px; opacity: 0; transition: opacity 0.4s 0.5s; }
+  .response-actions.revealed { opacity: 1; }
+  .response-actions button {
+    background: transparent; border: 1px solid rgba(245,166,35,0.3); color: var(--gold);
+    padding: 8px 16px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    font-family: 'Georgia', serif;
+  }
+
+  /* ── LEGEND (galaxy view) ── */
+  .legend {
+    position: fixed; bottom: 20px; left: 20px; z-index: 20; pointer-events: none;
+    display: flex; flex-direction: column; gap: 6px; opacity: 1; transition: opacity 0.4s;
+  }
+  .legend.hidden { opacity: 0; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--muted); }
+  .legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  @media (max-width: 600px) {
+    .top-bar { padding: 12px 14px; }
+    .logo { font-size: 15px; }
+    .upload-zone { padding: 28px 18px; }
+    .upload-title { font-size: 16px; }
+    .response-container { padding: 14px 12px 22px; }
+    .response-panel .pcontent { font-size: 12px; }
+  }
+
+  /* ── ACADEMY: pillar detail overlay ── */
+  .pillar-overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(4,6,12,0.75);
+    opacity: 0; pointer-events: none; transition: opacity 0.4s;
+  }
+  .pillar-overlay.visible { opacity: 1; pointer-events: all; }
+  .pillar-card {
+    width: min(420px, 86vw); padding: 32px 26px;
+    border: 1px solid rgba(245,166,35,0.35); border-radius: 16px;
+    background: rgba(10,14,26,0.92); backdrop-filter: blur(14px);
+    text-align: center;
+  }
+  .pillar-num { font-size: 11px; letter-spacing: 0.14em; color: var(--amber); text-transform: uppercase; }
+  .pillar-card h3 { font-size: 22px; color: var(--gold); margin: 10px 0 14px; letter-spacing: 0.04em; }
+  .pillar-card p { font-size: 13px; color: var(--text); line-height: 1.6; margin: 0 0 20px; }
+  .pillar-card button {
+    background: transparent; border: 1px solid rgba(245,166,35,0.3); color: var(--gold);
+    padding: 8px 20px; border-radius: 8px; font-size: 12px; cursor: pointer; font-family: 'Georgia', serif;
+  }
+
+  /* ── ACADEMY: ask the Brain a question ── */
+  .ask-bar {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 92px; z-index: 22; width: min(560px, 88vw);
+    display: none; align-items: center; gap: 8px;
+    background: rgba(10,14,26,0.86); backdrop-filter: blur(12px);
+    border: 1px solid rgba(245,166,35,0.3); border-radius: 30px;
+    padding: 8px 8px 8px 18px;
+  }
+  .ask-bar.visible { display: flex; }
+  .ask-bar input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text); font-family: 'Georgia', serif; font-size: 14px;
+  }
+  .ask-bar input::placeholder { color: var(--muted); }
+  .ask-bar button {
+    flex: none; background: rgba(245,166,35,0.15); border: 1px solid rgba(245,166,35,0.4);
+    color: var(--gold); border-radius: 22px; padding: 9px 18px; font-size: 13px;
+    cursor: pointer; font-family: 'Georgia', serif; letter-spacing: 0.04em;
+    min-height: 40px; transition: background 0.2s;
+  }
+  .ask-bar button:hover { background: rgba(245,166,35,0.25); }
+  .ask-bar button:disabled { opacity: 0.5; cursor: default; }
+  @media (max-width: 600px) {
+    .ask-bar { bottom: 150px; padding: 6px 6px 6px 14px; }
+    .ask-bar input { font-size: 13px; }
+  }
+
+  /* ── THRESHOLD: the Oath ── */
+  .threshold-oath {
+    position: fixed; inset: 0; z-index: 25;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    padding: 0 40px; text-align: center;
+  }
+  .threshold-oath span {
+    font-family: 'Georgia', serif;
+    font-size: clamp(20px, 4vw, 34px);
+    color: var(--gold);
+    letter-spacing: 0.03em;
+    opacity: 0;
+    transition: opacity 1.1s ease;
+    text-shadow: 0 0 30px rgba(245,166,35,0.5);
+  }
+  .threshold-oath span.shown { opacity: 1; }
+
+  /* ── PERSISTENT DISTRICT NAVIGATION ── */
+  .district-nav {
+    position: fixed; left:0; right:0; bottom:0; z-index:22;
+    display:flex; justify-content:center; align-items:center; gap:6px;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(4,6,12,0.92) 55%, transparent);
+    overflow-x:auto;
+    -webkit-overflow-scrolling: touch;
+    transition: opacity 0.4s;
+  }
+  .district-nav.hidden { opacity:0; pointer-events:none; }
+  .signin-btn {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+    z-index: 30;
+    background: linear-gradient(180deg, rgba(245,166,35,0.18), rgba(245,166,35,0.08));
+    border: 1px solid rgba(245,166,35,0.6);
+    color: #F5D08A;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 15px; letter-spacing: 0.08em;
+    padding: 12px 28px; border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 0 24px rgba(245,166,35,0.25);
+    transition: background 0.25s, box-shadow 0.25s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .signin-btn:hover {
+    background: linear-gradient(180deg, rgba(245,166,35,0.28), rgba(245,166,35,0.14));
+    box-shadow: 0 0 34px rgba(245,166,35,0.4);
+  }
+  .signin-btn:active { transform: translateX(-50%) scale(0.97); }
+  @media (max-width: 600px) {
+    .signin-btn { font-size: 13px; padding: 11px 22px; top: 56px; }
+  }
+  .district-nav button {
+    background: transparent;
+    border: 1px solid rgba(245,166,35,0.28);
+    color: var(--gold);
+    font-family:'Georgia', serif;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 12px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.25s, border-color 0.25s, color 0.25s;
+  }
+  .district-nav button.active {
+    background: rgba(245,166,35,0.2);
+    border-color: rgba(245,166,35,0.65);
+    color: var(--text);
+  }
+  @media (max-width: 600px) {
+    .district-nav { gap:4px; padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); justify-content:flex-start; }
+    .district-nav button { font-size: 11px; padding: 11px 11px; }
+  }
+
+  /* ── LOUNGE: Tribe community panel ── */
+  .tribe-panel {
+    position: fixed; top: 70px; right: 16px; bottom: 100px;
+    width: min(340px, 80vw);
+    z-index: 24;
+    background: rgba(10,14,26,0.88);
+    border: 1px solid rgba(245,166,35,0.25);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none; transform: translateX(16px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .tribe-panel.visible { opacity: 1; pointer-events: all; transform: translateX(0); }
+  .tribe-panel.collapsed .tribe-panel-body { display: none; }
+  .tribe-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; flex: none;
+    font-family: 'Georgia', serif; font-size: 12px; letter-spacing: 0.06em;
+    color: var(--gold);
+    border-bottom: 1px solid rgba(245,166,35,0.15);
+  }
+  .tribe-panel-header button {
+    background: transparent; border: 1px solid rgba(245,166,35,0.3); color: var(--gold);
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tribe-panel-body { flex: 1; display: flex; min-height: 0; }
+  .tribe-panel iframe { width: 100%; height: 100%; border: 0; background: #0a0e1a; }
+  @media (max-width: 600px) {
+    .tribe-panel { top: 60px; right: 8px; left: 8px; width: auto; bottom: 150px; }
+  }
+
+  /* ── VIDEO CALL (Jitsi) — same pattern as the Tribe panel, more room ── */
+  .jitsi-panel {
+    position: fixed; top: 70px; left: 16px; bottom: 100px;
+    width: min(480px, 88vw);
+    z-index: 24;
+    background: rgba(10,14,26,0.92);
+    border: 1px solid rgba(245,166,35,0.25);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none; transform: translateX(-16px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .jitsi-panel.visible { opacity: 1; pointer-events: all; transform: translateX(0); }
+  .jitsi-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; flex: none;
+    font-family: 'Georgia', serif; font-size: 12px; letter-spacing: 0.06em;
+    color: var(--gold);
+    border-bottom: 1px solid rgba(245,166,35,0.15);
+  }
+  .jitsi-panel-header button {
+    background: transparent; border: 1px solid rgba(245,166,35,0.3); color: var(--gold);
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 13px; line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .jitsi-panel-body { flex: 1; display: flex; min-height: 0; }
+  .jitsi-panel iframe { width: 100%; height: 100%; border: 0; background: #0a0e1a; }
+  .jitsi-trigger {
+    position: fixed; right: 16px; bottom: 100px; z-index: 23;
+    background: rgba(10,14,26,0.85); border: 1px solid rgba(245,166,35,0.3); color: var(--gold);
+    font-family: 'Georgia', serif; font-size: 11px; letter-spacing: 0.05em;
+    padding: 10px 16px; border-radius: 20px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (max-width: 600px) {
+    .jitsi-panel { top: 60px; left: 8px; right: 8px; width: auto; bottom: 150px; }
+    .jitsi-trigger { bottom: 150px; right: 8px; font-size: 10px; padding: 9px 13px; }
+  }
+
+  /* ── PRESENTATION MODE ── */
+  .presentation-trigger {
+    position: fixed; top: 8px; left: 8px; width: 20px; height: 20px;
+    background: transparent; border: none; cursor: pointer; z-index: 21;
+    opacity: 0.04; transition: opacity 0.3s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .presentation-trigger:hover, .presentation-trigger:focus { opacity: 0.5; }
+  .presentation-indicator {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 26; font-family: 'Georgia', serif; font-size: 10px; letter-spacing: 0.1em;
+    color: var(--gold); background: rgba(10,14,26,0.75); padding: 7px 16px; border-radius: 20px;
+    border: 1px solid rgba(245,166,35,0.3);
+    opacity: 0; pointer-events: none; transition: opacity 0.4s;
+  }
+  .presentation-indicator.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Fade overlay for transitions -->
+<div id="fadeOverlay"></div>
+
+<!-- Top bar -->
+<div class="top-bar">
+  <span class="logo">HUMBLIFX</span>
+  <span class="location" id="locationText">INSTITUTION · GALAXY OVERVIEW</span>
+</div>
+
+<!-- Activity ticker — live institution stats, galaxy overview only -->
+<div class="activity-ticker" id="activityTicker" style="display:none;">
+  <span class="tick-item"><span class="tick-num" id="tickMembers">1,247</span> members online</span>
+  <span class="tick-sep">·</span>
+  <span class="tick-item"><span class="tick-num" id="tickCharts">83</span> charts offered today</span>
+  <span class="tick-sep">·</span>
+  <span class="tick-item"><span class="tick-num" id="tickConnections">412</span> doctrine connections forged</span>
+  <span class="tick-sep">·</span>
+  <span class="tick-item"><span class="tick-num" id="tickSovereigns">3</span> Sovereigns present</span>
+</div>
+
+<!-- Back button -->
+<button class="back-btn" id="backBtn">← Galaxy</button>
+
+<!-- Sign-in button — shown only on the galaxy overview when signed out -->
+<button class="signin-btn" id="signInBtn" style="display:none;">Sign In to HumbliFX</button>
+
+<!-- Upload overlay (Floor) -->
+<div class="upload-overlay" id="uploadOverlay">
+  <div class="upload-zone" id="uploadZone">
+    <span class="upload-icon">📊</span>
+    <span class="upload-title">Offer your chart</span>
+    <span class="upload-hint">The Brain will reveal what it sees</span>
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+</div>
+
+<!-- Processing text -->
+<div class="processing-text" id="processingText">
+  <span class="phase" id="phaseText"></span>
+</div>
+
+<!-- Response panels -->
+<div class="response-container" id="responseContainer">
+  <div class="response-panel" id="pStructure"><div class="plabel-row"><span class="plabel">The Structure</span><span class="confidence-badge" id="confidenceBadge" style="display:none;"></span></div><span class="pcontent gold"></span></div>
+  <div class="response-panel" id="pLesson"><span class="plabel">The Lesson</span><span class="pcontent"></span></div>
+  <div class="response-panel" id="pDoctrine"><span class="plabel">Doctrine Link</span><span class="pcontent"></span></div>
+  <div class="response-panel" id="pMemory"><span class="plabel">Memory & Lineage</span><span class="pcontent"></span></div>
+  <div class="response-panel" id="pAssessment"><span class="plabel">The Brain's Assessment</span><span class="pcontent"></span></div>
+  <div class="response-actions" id="responseActions">
+    <button id="resetBtn">Offer another chart</button>
+    <button id="observatoryBtn">Take to Observatory</button>
+  </div>
+</div>
+
+<!-- Legend (galaxy view only) -->
+<div class="legend" id="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#F5A623;box-shadow:0 0 6px #F5A623;"></span> District</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#E8893A;"></span> Zone Node</div>
+  <div class="legend-item"><span class="legend-dot" style="border:1px solid rgba(245,166,35,0.3);"></span> Stream</div>
+</div>
+
+<!-- Academy: pillar detail overlay -->
+<div class="pillar-overlay" id="pillarOverlay">
+  <div class="pillar-card">
+    <span class="pillar-num" id="pillarNum"></span>
+    <h3 id="pillarName"></h3>
+    <p id="pillarText"></p>
+    <button id="pillarClose">Close</button>
+  </div>
+</div>
+
+<!-- Ask the Brain — a question interface, shown only in The Academy -->
+<div class="ask-bar" id="askBar">
+  <input type="text" id="askInput" placeholder="Ask the Brain about a principle, or your own progress…" maxlength="500" />
+  <button id="askBtn">Ask</button>
+</div>
+
+<!-- Threshold: the Oath, floating in the void -->
+<div class="threshold-oath" id="thresholdOath" style="display:none;">
+  <span id="oathLine"></span>
+</div>
+
+<!-- Persistent district navigation — populated by JS from the districts array -->
+<nav class="district-nav" id="districtNav"></nav>
+
+<!-- Lounge: Tribe community panel — an addition to the Wall of Names, not a replacement -->
+<div class="tribe-panel" id="tribePanel">
+  <div class="tribe-panel-header">
+    <span>Community</span>
+    <button id="tribePanelToggle" aria-label="Collapse community panel">—</button>
+  </div>
+  <div class="tribe-panel-body">
+    <iframe id="tribeFrame" loading="lazy" title="HumbliFX Community"></iframe>
+  </div>
+</div>
+
+<!-- Video call — same pattern as the Tribe panel, sized for an actual call -->
+<div class="jitsi-panel" id="jitsiPanel">
+  <div class="jitsi-panel-header">
+    <span>Video Call</span>
+    <button id="jitsiPanelClose" aria-label="Close video call">✕</button>
+  </div>
+  <div class="jitsi-panel-body">
+    <iframe id="jitsiFrame" allow="camera; microphone; fullscreen; display-capture; autoplay" loading="lazy" title="HumbliFX Video Call"></iframe>
+  </div>
+</div>
+<button id="jitsiTrigger" class="jitsi-trigger" aria-label="Open video call">Video Call</button>
+
+<!-- Presentation Mode — discreet trigger, status indicator while running -->
+<button id="presentationTrigger" class="presentation-trigger" aria-label="Start presentation mode"></button>
+<div class="presentation-indicator" id="presentationIndicator">PRESENTATION MODE — press Esc or tap to exit</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ═══════════════════════════════════════════════
+// CONFIG — every value you need to edit to deploy this lives here.
+// Nothing else in this file should need touching to go live.
+// ═══════════════════════════════════════════════
+const CONFIG = {
+  // Your Railway backend's base URL. No trailing slash.
+  BACKEND_URL: "https://web-production-5ae91.up.railway.app",
+
+  // From the Clerk dashboard → API Keys. This gets injected into the Clerk
+  // script tag below at load time — it's the only place you need to set it.
+  CLERK_PUBLISHABLE_KEY: "pk_test_YnVyc3RpbmctcmFwdG9yLTMzLmNsZXJrLmFjY291bnRzLmRldiQ",
+
+  // The Lounge embeds your Tribe community in a side panel. Leave this
+  // empty to keep the panel hidden entirely (no broken/empty iframe shown).
+  TRIBE_EMBED_URL: "",
+
+  // Video call room, embedded via Jitsi Meet. Leave empty to keep the
+  // call button/panel hidden entirely.
+  JITSI_ROOM_URL: "",
+
+  // The Brain's spoken voice (ElevenLabs via the backend's /speak endpoint).
+  // When true, the five-panel analysis is read aloud as it appears. Requires
+  // ELEVENLABS_API_KEY set on the backend; if that's missing or the call
+  // fails, the ritual simply proceeds in silence. Set false to disable.
+  VOICE_ENABLED: true,
+
+  // Presentation Mode — the auto-play cinematic sequence (press "P" or the
+  // hidden trigger button). All durations in milliseconds.
+  PRESENTATION_TIMINGS: {
+    // Total runtime = these values + the Oath's own fixed ~34.1s sequence
+    // (8 lines, not CONFIG-controlled — see startOathSequence). Current
+    // total: 77s + 34.1s ≈ 111s, comfortably inside a 90–120s target.
+    initialDelayMs: 7000,
+    postOathPauseMs: 4000,
+    floorPauseMs: 9000,
+    academyOrbitMs: 8000,
+    forgeDoorPauseMs: 5000,
+    loungeOrbitMs: 8000,
+    observatoryOrbitMs: 8000,
+    councilOrbitMs: 8000,
+    cameraTweenMs: 2000, // ~1s ease-in + ~1s ease-out per camera movement
+  },
+
+  // Ambient Activity Simulation — makes the institution feel inhabited.
+  // Pure client-side; no backend. Master switch plus per-district toggles so
+  // any piece can be dialled down without touching code. Counts are the
+  // desktop baseline; mobile (<768px) automatically takes 60% of each.
+  ACTIVITY: {
+    enabled: true,
+    ticker: true,         // global stats ticker, top-right of galaxy
+    heatbeat: true,       // periodic per-district intensity surges
+    ambientAudio: true,   // filtered-noise murmur in Lounge + Academy
+    threshold: true,      // arrival streams + burst + fading words
+    lounge: true,         // figures, scrolling names, spotlight
+    academy: true,        // figures, codex↔pillar streams, pillar flares
+    floor: true,          // live-feed panel + altar pulse + ghost flickers
+    forge: true,          // figures + door resonance
+    observatory: true,    // simulated memory nodes (atop the real feed)
+    council: true,        // seated figures + table rings
+    // Single knob for crowd density across every district. The figure counts
+    // in the spec are the ceiling; this scales them globally if needed.
+    figureDensity: 1.0,
+  },
+
+  // Backend secrets (ANTHROPIC_API_KEY, DOCTRINE, CLERK_JWKS_URL,
+  // CLERK_ISSUER, ALLOWED_ORIGINS, TRIBE_API_KEY, TRIBE_WEBHOOK_URL) live in
+  // main.py's environment variables on Railway, not here — see .env.example.
+  // Nothing to edit in this file for those.
+};
+
+// Load Clerk dynamically so CONFIG.CLERK_PUBLISHABLE_KEY is the one real
+// place to set it, instead of duplicating it in a separate <head> tag.
+// `clerkReady` resolves once Clerk has loaded and its initial session state
+// is known — everything auth-related waits on this rather than poking at
+// window.Clerk before it exists (the old failure: "Clerk was not loaded").
+let clerkToken = null;            // the live session token, or null when signed out
+let _clerkResolve;
+const clerkReady = new Promise(res => { _clerkResolve = res; });
+
+const clerkScript = document.createElement('script');
+clerkScript.async = true;
+clerkScript.crossOrigin = 'anonymous';
+clerkScript.setAttribute('data-clerk-publishable-key', CONFIG.CLERK_PUBLISHABLE_KEY);
+clerkScript.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+clerkScript.addEventListener('load', async () => {
+  try {
+    await window.Clerk.load();
+    // Fires on initial load and on every sign-in/sign-out. One handler keeps
+    // the token and the button in sync for the life of the page.
+    window.Clerk.addListener(handleClerkState);
+    await handleClerkState();         // run once for the initial state
+  } catch (err) {
+    console.warn('Clerk failed to initialize:', err);
+  }
+  _clerkResolve();
+});
+clerkScript.addEventListener('error', () => {
+  console.warn('Clerk SDK script failed to load.');
+  _clerkResolve();                    // never leave awaiters hanging forever
+});
+document.head.appendChild(clerkScript);
+
+async function handleClerkState() {
+  try {
+    if (window.Clerk && window.Clerk.session) {
+      clerkToken = await window.Clerk.session.getToken();
+    } else {
+      clerkToken = null;
+    }
+  } catch (_) {
+    clerkToken = null;
+  }
+  updateSignInButton();
+}
+
+// The button shows only on the galaxy overview AND only when signed out.
+// Called from auth-state changes and from navigateTo (district changes).
+function updateSignInButton() {
+  const btn = document.getElementById('signInBtn');
+  if (!btn) return;
+  const signedOut = !(window.Clerk && window.Clerk.session);
+  const onGalaxy = (currentDistrict === null);
+  btn.style.display = (signedOut && onGalaxy) ? '' : 'none';
+}
+
+// ═══════════════════════════════════════════════
+// DEVICE — one flag, read by every particle/star count and the renderer.
+// Automatic, no toggle: narrow viewport OR a mobile user-agent string.
+// ═══════════════════════════════════════════════
+const IS_MOBILE = window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile|webOS/i.test(navigator.userAgent);
+const PIXEL_RATIO_CAP = IS_MOBILE ? 1.5 : 2;
+
+// ═══════════════════════════════════════════════
+// GLOBAL STATE
+// ═══════════════════════════════════════════════
+let currentDistrict = null; // 'galaxy', 'floor', 'observatory', etc.
+let isTransitioning = false;
+let isProcessing = false;
+let chartPlane = null, chartTexture = null;
+const PRESENTATION = { active: false, timers: [], onThresholdComplete: null };
+
+// Explicit, time-based camera tween for presentation mode. The previous
+// approach nudged controls.target a tiny fraction per frame and called
+// controls.update(), relying on OrbitControls to reconcile a moving target
+// against its own internal spherical (radius/theta/phi) state — which is
+// exactly the kind of interaction that can silently stall depending on
+// version/internal bookkeeping. This instead directly lerps BOTH
+// camera.position and controls.target between two known endpoints over a
+// real wall-clock duration, so movement is guaranteed regardless of how
+// OrbitControls reconciles things. It also gives every movement a genuine
+// ease-in/ease-out for free.
+let presentationTween = null; // { fromPos, toPos, fromTarget, toTarget, startTime, duration }
+
+function easeInOutCubic(x) {
+  return x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2;
+}
+
+function presentationTweenCamera(toPos, toTarget, durationMs) {
+  presentationTween = {
+    fromPos: camera.position.clone(),
+    toPos: toPos.clone(),
+    fromTarget: controls.target.clone(),
+    toTarget: toTarget.clone(),
+    startTime: performance.now(),
+    duration: durationMs,
+  };
+}
+
+// DOM elements
+const fadeOverlay = document.getElementById('fadeOverlay');
+const locationText = document.getElementById('locationText');
+const backBtn = document.getElementById('backBtn');
+const uploadOverlay = document.getElementById('uploadOverlay');
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const processingText = document.getElementById('processingText');
+const phaseText = document.getElementById('phaseText');
+const responseContainer = document.getElementById('responseContainer');
+const legend = document.getElementById('legend');
+const responseActions = document.getElementById('responseActions');
+
+// ═══════════════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════════════
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#04060c');
+scene.fog = new THREE.Fog('#04060c', 5, 40);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.3, 60);
+camera.position.set(0, 3, 14);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIXEL_RATIO_CAP));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 3;
+controls.maxDistance = 30;
+controls.maxPolarAngle = Math.PI * 0.75;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.2;
+controls.update();
+
+// ═══════════════════════════════════════════════
+// AUDIO — Web Audio synthesis, no external files
+// ═══════════════════════════════════════════════
+// Browsers block audio that isn't started from a real user gesture. This is
+// gated on the first click anywhere on the page, and setAudioProfile() also
+// lazily self-initializes as a defensive fallback if it's ever called first.
+let audioCtx = null;
+let masterGain = null;
+let droneOsc = null, droneGain = null;
+let shimmerOsc = null, shimmerGain = null;
+let choir2Osc = null, choir2Gain = null;
+let choir3Osc = null, choir3Gain = null;
+let lfoOsc = null, lfoDepth = null;
+let echoDelay = null, echoFeedback = null, echoWet = null;
+let audioReady = false;
+let accentTimer = null;
+let currentAudioProfile = null;
+
+const MASTER_GAIN_LEVEL = 0.07; // spec range 0.06–0.08: felt, not heard
+
+function initAudio() {
+  if (audioReady) return;
+  audioReady = true;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = MASTER_GAIN_LEVEL;
+    masterGain.connect(audioCtx.destination);
+
+    droneOsc = audioCtx.createOscillator();
+    droneOsc.type = 'sine';
+    droneOsc.frequency.value = 42;
+    droneGain = audioCtx.createGain();
+    droneGain.gain.value = 0.6;
+    droneOsc.connect(droneGain);
+    droneGain.connect(masterGain);
+    droneOsc.start();
+
+    shimmerOsc = audioCtx.createOscillator();
+    shimmerOsc.type = 'sine';
+    shimmerOsc.frequency.value = 880;
+    shimmerGain = audioCtx.createGain();
+    shimmerGain.gain.value = 0.08;
+    shimmerOsc.connect(shimmerGain);
+    shimmerGain.connect(masterGain);
+    shimmerOsc.start();
+
+    // Silent unless a profile (Academy, faintly Lounge) brings them up
+    choir2Osc = audioCtx.createOscillator();
+    choir2Osc.type = 'sine';
+    choir2Osc.frequency.value = 130;
+    choir2Gain = audioCtx.createGain();
+    choir2Gain.gain.value = 0;
+    choir2Osc.connect(choir2Gain);
+    choir2Gain.connect(masterGain);
+    choir2Osc.start();
+
+    choir3Osc = audioCtx.createOscillator();
+    choir3Osc.type = 'sine';
+    choir3Osc.frequency.value = 195;
+    choir3Gain = audioCtx.createGain();
+    choir3Gain.gain.value = 0;
+    choir3Osc.connect(choir3Gain);
+    choir3Gain.connect(masterGain);
+    choir3Osc.start();
+
+    // LFO modulates the drone's own gain (tremolo) — connecting an
+    // audio-rate signal straight into an AudioParam is the standard idiom.
+    lfoOsc = audioCtx.createOscillator();
+    lfoOsc.type = 'sine';
+    lfoOsc.frequency.value = 0.15;
+    lfoDepth = audioCtx.createGain();
+    lfoDepth.gain.value = 0.15;
+    lfoOsc.connect(lfoDepth);
+    lfoDepth.connect(droneGain.gain);
+    lfoOsc.start();
+
+    // Echo bus (Forge): delay + feedback loop, no impulse-response file needed
+    echoDelay = audioCtx.createDelay(2.0);
+    echoDelay.delayTime.value = 0.34;
+    echoFeedback = audioCtx.createGain();
+    echoFeedback.gain.value = 0.38;
+    echoWet = audioCtx.createGain();
+    echoWet.gain.value = 0.5;
+    echoDelay.connect(echoFeedback);
+    echoFeedback.connect(echoDelay);
+    echoDelay.connect(echoWet);
+    echoWet.connect(masterGain);
+  } catch (e) {
+    console.warn('Audio unavailable:', e);
+    audioReady = false;
+    audioCtx = null;
+  }
+}
+window.addEventListener('click', initAudio, { once: true });
+
+function rampGain(node, value, seconds = 1.2) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  node.gain.cancelScheduledValues(now);
+  node.gain.setTargetAtTime(value, now, seconds / 4);
+}
+
+function rampFreq(osc, value, seconds = 1.2) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  osc.frequency.cancelScheduledValues(now);
+  osc.frequency.setTargetAtTime(value, now, seconds / 4);
+}
+
+// Bug fix: the shimmer voice (fixed 880Hz) has a non-zero gain in 7 of 8
+// profiles and was never silenced between presentation transitions — over
+// an extended automated sequence that reads as a near-continuous high
+// tone, not a one-off glitch. Ducking the whole mix to silence during every
+// transition and restoring it once the new district's profile is set
+// breaks that continuity and gives a clean, deliberate fade each time.
+function duckMasterAudio() {
+  if (!audioCtx) return;
+  rampGain(masterGain, 0, 0.3);
+}
+function restoreMasterAudio() {
+  if (!audioCtx) return;
+  rampGain(masterGain, MASTER_GAIN_LEVEL, 0.8);
+}
+
+// A short plucked tone for sparse accents — Forge's echo, Observatory's
+// chimes, Council's bells. through:'echo' also routes it into the delay bus.
+function pluckTone(freq, { through = 'master', duration = 1.6, peak = 0.18 } = {}) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  const env = audioCtx.createGain();
+  env.gain.setValueAtTime(0, now);
+  env.gain.linearRampToValueAtTime(peak, now + 0.05);
+  env.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(env);
+  env.connect(masterGain);
+  if (through === 'echo') env.connect(echoDelay);
+  osc.start(now);
+  osc.stop(now + duration + 0.1);
+}
+
+function stopAccents() {
+  if (accentTimer) { clearTimeout(accentTimer); accentTimer = null; }
+}
+
+const AUDIO_PROFILES = {
+  galaxy:      { drone:42, lfoRate:0.15, lfoDepth:0.15, shimmer:0.08, choir:0 },
+  floor:       { drone:30, lfoRate:0.07, lfoDepth:0.22, shimmer:0.03, choir:0 },
+  academy:     { drone:65, lfoRate:0.10, lfoDepth:0.10, shimmer:0.04, choir:0.18 },
+  forge:       { drone:30, lfoRate:0.05, lfoDepth:0.10, shimmer:0.0,  choir:0,
+                 accents: () => pluckTone(220, { through:'echo', duration:2.2, peak:0.14 }), accentEvery:[4500,7000] },
+  threshold:   { drone:42, lfoRate:0.08, lfoDepth:0.10, shimmer:0.10, choir:0, silentUntilProximity:true },
+  lounge:      { drone:48, lfoRate:0.12, lfoDepth:0.08, shimmer:0.12, choir:0.08 },
+  observatory: { drone:38, lfoRate:0.06, lfoDepth:0.12, shimmer:0.10, choir:0,
+                 accents: () => pluckTone(1760, { duration:2.0, peak:0.07 }), accentEvery:[7000,13000] },
+  council:     { drone:36, lfoRate:0.06, lfoDepth:0.08, shimmer:0.05, choir:0,
+                 accents: () => pluckTone(523, { duration:2.4, peak:0.09 }), accentEvery:[6000,10000] },
+};
+
+function setAudioProfile(name) {
+  if (!audioReady) initAudio();
+  if (!audioCtx) return;
+  ensureMurmur();
+  const profile = AUDIO_PROFILES[name] || AUDIO_PROFILES.galaxy;
+  if (currentAudioProfile === name) return;
+  currentAudioProfile = name;
+
+  stopAccents();
+  rampFreq(droneOsc, profile.drone, 2);
+  rampFreq(lfoOsc, profile.lfoRate, 2);
+  rampGain(lfoDepth, profile.lfoDepth, 2);
+  rampGain(shimmerGain, profile.shimmer, 2);
+  rampGain(choir2Gain, profile.choir, 2);
+  rampGain(choir3Gain, profile.choir, 2);
+  rampGain(droneGain, profile.silentUntilProximity ? 0 : 0.6, 2);
+
+  if (profile.accents) {
+    const schedule = () => {
+      profile.accents();
+      const [lo, hi] = profile.accentEvery;
+      accentTimer = setTimeout(schedule, lo + Math.random() * (hi - lo));
+    };
+    schedule();
+  }
+}
+
+// Threshold only: drone is silent until the proximity calc in animate()
+// (the same value driving the light's growth) pushes it back up.
+function updateThresholdAudio(proximity) {
+  if (!audioCtx || currentAudioProfile !== 'threshold') return;
+  rampGain(droneGain, 0.6 * proximity, 0.4);
+  rampGain(shimmerGain, AUDIO_PROFILES.threshold.shimmer * proximity, 0.4);
+}
+
+// Lights
+scene.add(new THREE.AmbientLight('#1a1a3a', 0.9));
+const coreLight = new THREE.PointLight('#F5A623', 15, 20, 1.0);
+coreLight.position.set(0, 0.3, 0);
+scene.add(coreLight);
+const coreInner = new THREE.PointLight('#FFD700', 5, 5, 1.5);
+coreInner.position.set(0, 0.3, 0);
+scene.add(coreInner);
+scene.add(new THREE.PointLight('#334466', 2, 25, 2).translateX(8).translateY(4).translateZ(-6));
+
+// Glow texture helper
+function glowTex(color, size) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  g.addColorStop(0, color);
+  g.addColorStop(0.3, color);
+  g.addColorStop(0.7, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'transparent');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(c);
+}
+const goldGlow = glowTex('#F5A623', 256);
+const softGlow = glowTex('#F5A623', 512);
+const amberGlow = glowTex('#E8893A', 128);
+
+function labelTex(text, color) {
+  const c = document.createElement('canvas');
+  c.width = 640; c.height = 160;
+  const ctx = c.getContext('2d');
+  ctx.font = '54px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(245,166,35,0.85)';
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = color || '#F0D080';
+  ctx.fillText(text, c.width/2, c.height/2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// Square canvas for a single glyph/symbol — labelTex's wide rectangle is
+// tuned for multi-word labels and would render a lone symbol as a tiny
+// speck at typical sprite scale.
+function glyphTex(symbol, color) {
+  const c = document.createElement('canvas');
+  c.width = 160; c.height = 160;
+  const ctx = c.getContext('2d');
+  ctx.font = '110px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(245,166,35,0.85)';
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = color || '#F0D080';
+  ctx.fillText(symbol, c.width/2, c.height/2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// ═══════════════════════════════════════════════
+// STARFIELD
+// ═══════════════════════════════════════════════
+const starCount = IS_MOBILE ? 2000 : 4000;
+const starGeo = new THREE.BufferGeometry();
+const sp = new Float32Array(starCount*3);
+const scArr = new Float32Array(starCount*3);
+for (let i=0; i<starCount; i++) {
+  const th = Math.random()*Math.PI*2, ph = Math.acos(2*Math.random()-1), r = 18+Math.random()*25;
+  sp[i*3]=r*Math.sin(ph)*Math.cos(th); sp[i*3+1]=r*Math.sin(ph)*Math.sin(th); sp[i*3+2]=r*Math.cos(ph);
+  const cr=Math.random();
+  scArr[i*3]= cr<0.06?1:cr<0.2?0.7:0.75; scArr[i*3+1]= cr<0.06?0.85:cr<0.2?0.75:0.78; scArr[i*3+2]= cr<0.06?0.5:cr<0.2?1:0.9;
+}
+starGeo.setAttribute('position',new THREE.BufferAttribute(sp,3));
+starGeo.setAttribute('color',new THREE.BufferAttribute(scArr,3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({size:0.05,vertexColors:true,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,opacity:0.65}));
+scene.add(stars);
+
+// ═══════════════════════════════════════════════
+// GALAXY MAP GROUP (overview)
+// ═══════════════════════════════════════════════
+const galaxyGroup = new THREE.Group();
+galaxyGroup.name = 'GalaxyMap';
+
+const districts = [
+  { id:'observatory', name:'The Observatory', pos:[0,0.3,0], size:0.55, glow:7, core:true, color:'#FFD700' },
+  { id:'floor', name:'The Floor', pos:[5.2,0.6,1.8], size:0.38, glow:4.5, color:'#F5A623' },
+  { id:'academy', name:'The Academy', pos:[-4.5,-0.4,3.5], size:0.36, glow:4.2, color:'#F5A623' },
+  { id:'lounge', name:'The Lounge', pos:[2.8,1.6,-4.2], size:0.34, glow:4, color:'#F5A623' },
+  { id:'forge', name:'The Forge', pos:[-3.2,-1.3,-4.0], size:0.35, glow:4.1, color:'#F5A623' },
+  { id:'council', name:'The Council Chamber', pos:[-4.8,2.0,-1.5], size:0.30, glow:3.6, color:'#F5A623' },
+  { id:'threshold', name:'The Threshold', pos:[4.5,-1.8,-3.0], size:0.32, glow:3.8, color:'#F5A623' }
+];
+// FIXED by Claude: original objects had no `color` key. Three.js Material.setValues()
+// silently skips any key whose value is `undefined` (with a console warning) — so every
+// district sphere and sprite kept its material default (white, no emissive) instead of
+// glowing gold. Adding explicit hex values restores the intended look.
+
+const districtClickables = [];
+
+districts.forEach(d => {
+  const pos = new THREE.Vector3(...d.pos);
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(d.size, 48, 48),
+    new THREE.MeshStandardMaterial({ color:d.color, emissive:d.color, emissiveIntensity:d.core?4:2.5, roughness:0.15, metalness:0.9 })
+  );
+  sphere.position.copy(pos);
+  sphere.userData = { type:'district', district:d };
+  galaxyGroup.add(sphere);
+  districtClickables.push(sphere);
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: d.core?softGlow:goldGlow, blending:THREE.AdditiveBlending, depthWrite:false,
+    opacity:d.core?0.9:0.55, color:d.color
+  }));
+  sprite.position.copy(pos);
+  sprite.scale.setScalar(d.glow);
+  galaxyGroup.add(sprite);
+
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(d.name), transparent:true, depthWrite:false }));
+  label.position.set(pos.x, pos.y + d.size + 0.55, pos.z);
+  label.scale.set(2.6, 0.65, 1);
+  galaxyGroup.add(label);
+
+  if (!d.core) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(5.3, 0.012, 16, 200),
+      new THREE.MeshBasicMaterial({ color:d.color, transparent:true, opacity:0.06, blending:THREE.AdditiveBlending, depthWrite:false })
+    );
+    ring.rotation.x = Math.PI*0.5 + (Math.random()-0.5)*0.5;
+    galaxyGroup.add(ring);
+  }
+
+  // Zone nodes
+  if (!d.core) {
+    const zList = (d.name==='The Floor' ? 'Offering Chamber · Pattern Library · Live Pulse' :
+                   d.name==='The Observatory' ? 'Neural Constellation · Lineage Threads · Living Now' :
+                   d.name==='The Academy' ? '8 Pillars Hall · Doctrine Codex · Breakthrough Archive' :
+                   d.name==='The Lounge' ? 'Atrium · Wall of Names · Chronicle · Rank Gallery' :
+                   d.name==='The Forge' ? 'Trial Vault · Mirror Room · Crucible' :
+                   d.name==='The Council Chamber' ? 'Founder\'s Table · Dispatch Room' :
+                   'Invitation · Oath · Entry Hall').split(' · ');
+    zList.forEach((zn,zi)=>{
+      const angle = (zi/zList.length)*Math.PI*2 + Math.random()*0.3;
+      const dist = 5.6 + Math.random()*0.8;
+      const zMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 12, 12),
+        new THREE.MeshStandardMaterial({ color:'#E8893A', emissive:'#E8893A', emissiveIntensity:1.3, roughness:0.3 })
+      );
+      zMesh.position.set(pos.x+Math.cos(angle)*dist, pos.y+(Math.random()-0.5)*0.8, pos.z+Math.sin(angle)*dist);
+      zMesh.userData = { type:'zone', zoneName:zn.trim(), districtName:d.name, districtId:d.id, baseAngle:angle, orbitDist:dist, parentPos:pos.clone(), orbitSpeed:0.25+Math.random()*0.4, yBase:zMesh.position.y };
+      galaxyGroup.add(zMesh);
+      districtClickables.push(zMesh);
+      const zGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:amberGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.4 }));
+      zGlow.position.copy(zMesh.position);
+      zGlow.scale.setScalar(0.6);
+      zMesh.userData.glowSprite = zGlow;
+      galaxyGroup.add(zGlow);
+    });
+  }
+});
+
+// Connection streams (Brain to each district)
+const streams = [];
+const corePos = new THREE.Vector3(0,0.3,0);
+districts.forEach(d => {
+  if (d.core) return;
+  const count = 35;
+  const geo = new THREE.BufferGeometry();
+  const pts = new Float32Array(count*3);
+  const meta = [];
+  const dPos = new THREE.Vector3(...d.pos);
+  const mid = new THREE.Vector3().addVectors(corePos, dPos).multiplyScalar(0.5);
+  mid.y += 1.2;
+  const curve = new THREE.QuadraticBezierCurve3(corePos.clone(), mid, dPos.clone());
+  for (let i=0;i<count;i++) {
+    const t = i/count;
+    const pt = curve.getPoint(t);
+    pts[i*3]=pt.x; pts[i*3+1]=pt.y; pts[i*3+2]=pt.z;
+    meta.push({curve, t, speed:0.025+Math.random()*0.07});
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pts,3));
+  const stream = new THREE.Points(geo, new THREE.PointsMaterial({ color:'#F5A623', size:0.025, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.45 }));
+  galaxyGroup.add(stream);
+  streams.push({stream, meta, count});
+});
+
+// Ambient galaxy particles
+const apCount = IS_MOBILE ? 700 : 1400;
+const apGeo = new THREE.BufferGeometry();
+const apPts = new Float32Array(apCount*3);
+const apMeta = [];
+for (let i=0;i<apCount;i++) {
+  const a=Math.random()*Math.PI*2, r=3+Math.random()*12, h=(Math.random()-0.5)*8;
+  apPts[i*3]=Math.cos(a)*r; apPts[i*3+1]=h; apPts[i*3+2]=Math.sin(a)*r;
+  apMeta.push({baseAngle:a, radius:r, baseH:h, speed:0.08+Math.random()*0.2, vAmp:0.5+Math.random()*2, phase:Math.random()*Math.PI*2});
+}
+apGeo.setAttribute('position', new THREE.BufferAttribute(apPts,3));
+const apMesh = new THREE.Points(apGeo, new THREE.PointsMaterial({ color:'#F5A623', size:0.025, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.38 }));
+galaxyGroup.add(apMesh);
+
+// Premium nebula — particle-based, not sprite-based. A few large blurry
+// sprites reads as a cheap glow effect; thousands of small points clustered
+// into cloud shapes reads as texture/grain, which is what actually sells
+// "nebula" instead of "glow filter." One draw call regardless of count.
+const NEBULA_CLOUD_CENTERS = [
+  { pos:[10, 4, -8],   radius:9,  color:'#E8893A' },
+  { pos:[-12, -3, 6],  radius:11, color:'#F5A623' },
+  { pos:[4, -6, 14],   radius:8,  color:'#FFD27A' },
+  { pos:[-6, 5, -16],  radius:10, color:'#3A4A6B' },
+  { pos:[14, -2, 10],  radius:7,  color:'#C97A3D' },
+];
+const NEBULA_PARTICLE_COUNT = IS_MOBILE ? 2800 : 5600;
+const nebulaGeo = new THREE.BufferGeometry();
+const nebulaPos = new Float32Array(NEBULA_PARTICLE_COUNT * 3);
+const nebulaCol = new Float32Array(NEBULA_PARTICLE_COUNT * 3);
+const nebulaMeta = [];
+for (let i = 0; i < NEBULA_PARTICLE_COUNT; i++) {
+  const cloud = NEBULA_CLOUD_CENTERS[i % NEBULA_CLOUD_CENTERS.length];
+  const r = cloud.radius * Math.pow(Math.random(), 1.8); // biased toward center: dense core, sparse haze edge
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const x = cloud.pos[0] + r * Math.sin(phi) * Math.cos(theta);
+  const y = cloud.pos[1] + r * Math.sin(phi) * Math.sin(theta) * 0.5; // flattened — reads as a cloud, not a sphere
+  const z = cloud.pos[2] + r * Math.cos(phi);
+  nebulaPos[i*3]=x; nebulaPos[i*3+1]=y; nebulaPos[i*3+2]=z;
+
+  const c = new THREE.Color(cloud.color);
+  const variance = 0.7 + Math.random() * 0.5; // per-particle brightness variation = grain, not a flat fill
+  nebulaCol[i*3]=c.r*variance; nebulaCol[i*3+1]=c.g*variance; nebulaCol[i*3+2]=c.b*variance;
+
+  nebulaMeta.push({ baseX:x, baseY:y, baseZ:z, phase:Math.random()*Math.PI*2, driftSpeed:0.01+Math.random()*0.02 });
+}
+nebulaGeo.setAttribute('position', new THREE.BufferAttribute(nebulaPos, 3));
+nebulaGeo.setAttribute('color', new THREE.BufferAttribute(nebulaCol, 3));
+const nebulaMesh = new THREE.Points(nebulaGeo, new THREE.PointsMaterial({
+  size: 0.22, vertexColors:true, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.55, sizeAttenuation:true
+}));
+galaxyGroup.add(nebulaMesh);
+
+// Drifting haze — sparser, larger, slower than the existing tight ambient
+// stream particles, filling a wider volume for depth.
+const hazeCount = IS_MOBILE ? 240 : 480;
+const hazeGeo = new THREE.BufferGeometry();
+const hazePos = new Float32Array(hazeCount*3);
+const hazeMeta = [];
+for (let i=0;i<hazeCount;i++) {
+  const a=Math.random()*Math.PI*2, r=6+Math.random()*22, h=(Math.random()-0.5)*14;
+  hazePos[i*3]=Math.cos(a)*r; hazePos[i*3+1]=h; hazePos[i*3+2]=Math.sin(a)*r;
+  hazeMeta.push({baseAngle:a, radius:r, baseH:h, speed:0.02+Math.random()*0.05, vAmp:1+Math.random()*3, phase:Math.random()*Math.PI*2});
+}
+hazeGeo.setAttribute('position', new THREE.BufferAttribute(hazePos,3));
+const hazeMesh = new THREE.Points(hazeGeo, new THREE.PointsMaterial({ color:'#F0A84A', size:0.06, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.3 }));
+galaxyGroup.add(hazeMesh);
+
+// Pulse rings
+const pulseRings = [];
+for (let i=0;i<4;i++) {
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5,0.007,16,120), new THREE.MeshBasicMaterial({ color:'#F5A623', transparent:true, opacity:0.5, blending:THREE.AdditiveBlending, depthWrite:false }));
+  ring.position.copy(corePos);
+  ring.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+  ring.userData = { base:0.5, max:14, speed:0.3+i*0.2, phase:i*Math.PI*0.5 };
+  ring.scale.setScalar(0.5);
+  galaxyGroup.add(ring);
+  pulseRings.push(ring);
+}
+
+scene.add(galaxyGroup);
+
+// District nav bar — built from the same `districts` data the orbs/labels
+// already use, so there's one source of truth for district names, not three.
+const districtNav = document.getElementById('districtNav');
+districts.forEach(d => {
+  const btn = document.createElement('button');
+  btn.textContent = d.name;
+  btn.dataset.districtId = d.id;
+  btn.addEventListener('click', () => navigateTo(d.id));
+  districtNav.appendChild(btn);
+});
+
+function updateNavActiveState(districtId) {
+  districtNav.querySelectorAll('button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.districtId === districtId);
+  });
+}
+
+// Single place that decides whether the nav bar should be visible — avoids
+// scattering show/hide calls that could get out of sync. Hidden during the
+// Threshold's no-UI sequence, and hidden while the Floor's response panel
+// is open (both are bottom-anchored fixed elements and would overlap).
+function updateNavVisibility() {
+  const shouldHide = currentDistrict === 'threshold' || responseContainer.classList.contains('visible');
+  districtNav.classList.toggle('hidden', shouldHide);
+}
+
+// Tribe community panel — shown only in the Lounge, lazy-loads the iframe
+// once on first entry rather than on page load, and never shows at all if
+// no URL is configured (an empty/broken iframe looks worse than no panel).
+const tribePanel = document.getElementById('tribePanel');
+const tribeFrame = document.getElementById('tribeFrame');
+document.getElementById('tribePanelToggle').addEventListener('click', (e) => {
+  e.stopPropagation();
+  tribePanel.classList.toggle('collapsed');
+});
+
+function showTribePanel() {
+  if (!CONFIG.TRIBE_EMBED_URL) return;
+  if (!tribeFrame.src) tribeFrame.src = CONFIG.TRIBE_EMBED_URL;
+  tribePanel.classList.add('visible');
+}
+function hideTribePanel() {
+  tribePanel.classList.remove('visible');
+}
+
+// Video call (Jitsi) — global/persistent by design, unlike the Lounge-scoped
+// Tribe panel: a call shouldn't hang up just because you walked to a
+// different district. Closes only when the user explicitly closes it, or
+// when Presentation Mode starts (so a stray open call doesn't show during
+// the curated sequence).
+const jitsiPanel = document.getElementById('jitsiPanel');
+const jitsiFrame = document.getElementById('jitsiFrame');
+const jitsiTrigger = document.getElementById('jitsiTrigger');
+
+// Best-effort branding reduction via Jitsi's documented hash-config
+// overrides. Whether these actually take effect depends on which Jitsi
+// deployment the room URL points at — the public meet.jit.si instance may
+// not honor all of them. A fully branding-free embed reliably needs Jitsi
+// as a Service or a self-hosted instance with its own interface config.
+function buildJitsiSrc(baseUrl) {
+  if (!baseUrl) return '';
+  const overrides = [
+    'config.prejoinPageEnabled=false',
+    'config.disableDeepLinking=true',
+    'interfaceConfig.SHOW_JITSI_WATERMARK=false',
+    'interfaceConfig.SHOW_WATERMARK_FOR_GUESTS=false',
+    'interfaceConfig.SHOW_BRAND_WATERMARK=false',
+    'interfaceConfig.DISPLAY_WELCOME_PAGE_CONTENT=false',
+    'interfaceConfig.MOBILE_APP_PROMO=false',
+  ].join('&');
+  return baseUrl.includes('#') ? baseUrl : `${baseUrl}#${overrides}`;
+}
+
+function openJitsiPanel() {
+  if (!CONFIG.JITSI_ROOM_URL) return;
+  if (!jitsiFrame.src) jitsiFrame.src = buildJitsiSrc(CONFIG.JITSI_ROOM_URL);
+  jitsiPanel.classList.add('visible');
+}
+function closeJitsiPanel() {
+  jitsiPanel.classList.remove('visible');
+}
+jitsiTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (jitsiPanel.classList.contains('visible')) closeJitsiPanel();
+  else openJitsiPanel();
+});
+document.getElementById('jitsiPanelClose').addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeJitsiPanel();
+});
+if (!CONFIG.JITSI_ROOM_URL) jitsiTrigger.style.display = 'none';
+
+// ═══════════════════════════════════════════════
+// DISTRICT INTERIORS (hidden by default)
+// ═══════════════════════════════════════════════
+const interiors = {};
+
+// ── THE FLOOR: Offering Chamber ──
+interiors.floor = new THREE.Group();
+interiors.floor.position.set(0, -20, 0); // placed far below
+interiors.floor.visible = false;
+
+// Chamber walls
+const wallGeo = new THREE.CylinderGeometry(4.5, 5, 8, 64, 1, true);
+const wallMat = new THREE.MeshStandardMaterial({ color:'#0a0e1a', roughness:0.8, metalness:0.2, emissive:'#050510', emissiveIntensity:0.3, side:THREE.BackSide });
+const walls = new THREE.Mesh(wallGeo, wallMat);
+walls.position.y = 0;
+interiors.floor.add(walls);
+
+// Floor
+const floorGeo = new THREE.CircleGeometry(5, 64);
+const floorMat = new THREE.MeshStandardMaterial({ color:'#080c14', roughness:0.3, metalness:0.6, emissive:'#050510', emissiveIntensity:0.2 });
+const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+floorMesh.rotation.x = -Math.PI/2;
+floorMesh.position.y = -3.5;
+interiors.floor.add(floorMesh);
+
+// Altar (pillar + orb)
+const altar = new THREE.Group();
+const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.18,2.5,32), new THREE.MeshStandardMaterial({ color:'#F5A623', emissive:'#F5A623', emissiveIntensity:2.5, roughness:0.1, metalness:0.9 }));
+pillar.position.y = 1;
+altar.add(pillar);
+const pillarSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:softGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.8, color:'#F5A623' }));
+pillarSprite.position.y = 1;
+pillarSprite.scale.setScalar(3.5);
+altar.add(pillarSprite);
+const orb = new THREE.Mesh(new THREE.SphereGeometry(0.2,32,32), new THREE.MeshStandardMaterial({ color:'#FFD700', emissive:'#FFD700', emissiveIntensity:4, roughness:0.05, metalness:1 }));
+orb.position.y = 2.3;
+altar.add(orb);
+const orbSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:goldGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.9, color:'#FFD700' }));
+orbSprite.position.copy(orb.position);
+orbSprite.scale.setScalar(2);
+altar.add(orbSprite);
+interiors.floor.add(altar);
+
+// Gold detail rings on the pillar — more presence without changing its shape
+[0.4, 1.3, 2.0].forEach(yPos => {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.22, 0.025, 12, 32),
+    new THREE.MeshStandardMaterial({ color:'#FFD700', emissive:'#FFD700', emissiveIntensity:2.2, roughness:0.15, metalness:0.9 })
+  );
+  ring.position.y = yPos;
+  ring.rotation.x = Math.PI/2;
+  altar.add(ring);
+});
+
+// Floating embers — rise rather than orbit, unlike the existing chamber particles
+const emberCount = IS_MOBILE ? 70 : 140;
+const emberGeo = new THREE.BufferGeometry();
+const emberPos = new Float32Array(emberCount*3);
+const emberMeta = [];
+for (let i=0;i<emberCount;i++) {
+  const a=Math.random()*Math.PI*2, r=0.3+Math.random()*1.8, h=-3.4+Math.random()*5;
+  emberPos[i*3]=Math.cos(a)*r; emberPos[i*3+1]=h; emberPos[i*3+2]=Math.sin(a)*r;
+  emberMeta.push({ baseA:a, r, baseH:h, riseSpeed:0.15+Math.random()*0.3, drift:0.1+Math.random()*0.15, phase:Math.random()*Math.PI*2 });
+}
+emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos,3));
+const emberMesh = new THREE.Points(emberGeo, new THREE.PointsMaterial({ color:'#FFB347', size:0.035, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.6 }));
+interiors.floor.add(emberMesh);
+
+// Circuit lines
+const circuitGroup = new THREE.Group();
+for (let i=0;i<25;i++) {
+  const angle = (i/25)*Math.PI*2;
+  const r = 3+Math.random()*1.8;
+  const pts = [];
+  for (let j=0;j<4;j++) {
+    const a = angle + (j-1.5)*0.15;
+    pts.push(new THREE.Vector3(Math.cos(a)*r, -3+j*1.5, Math.sin(a)*r));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(12)), new THREE.LineBasicMaterial({ color:'#F5A623', transparent:true, opacity:0.06, blending:THREE.AdditiveBlending, depthWrite:false }));
+  circuitGroup.add(line);
+}
+interiors.floor.add(circuitGroup);
+
+// Ambient particles (chamber)
+const cpCount = IS_MOBILE ? 200 : 400;
+const cpGeo = new THREE.BufferGeometry();
+const cpPos = new Float32Array(cpCount*3);
+const cpMetaArr = [];
+for (let i=0;i<cpCount;i++) {
+  const a=Math.random()*Math.PI*2, r=1.5+Math.random()*4, h=-2+Math.random()*5;
+  cpPos[i*3]=Math.cos(a)*r; cpPos[i*3+1]=h; cpPos[i*3+2]=Math.sin(a)*r;
+  cpMetaArr.push({baseA:a, r, baseH:h, spd:0.1+Math.random()*0.3, vAmp:0.3+Math.random()*1, ph:Math.random()*Math.PI*2});
+}
+cpGeo.setAttribute('position', new THREE.BufferAttribute(cpPos,3));
+const cpMesh = new THREE.Points(cpGeo, new THREE.PointsMaterial({ color:'#F5A623', size:0.02, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.35 }));
+interiors.floor.add(cpMesh);
+
+// Scan lines (initially invisible)
+const scanGroup = new THREE.Group();
+for (let i=0;i<5;i++) {
+  const scan = new THREE.Mesh(new THREE.PlaneGeometry(3.5,0.015), new THREE.MeshBasicMaterial({ color:'#F5A623', transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+  scan.position.y = 2.5 - i*1.2;
+  scan.position.z = 0.01;
+  scan.userData = { baseY: scan.position.y, phase: i*0.3, speed:0.6+i*0.15 };
+  scanGroup.add(scan);
+}
+scanGroup.visible = false;
+interiors.floor.add(scanGroup);
+
+scene.add(interiors.floor);
+
+// ── THE OBSERVATORY: Neural Constellation (simplified) ──
+interiors.observatory = new THREE.Group();
+interiors.observatory.position.set(22, 0, 0);
+interiors.observatory.visible = false;
+
+// Central constellation
+const constGroup = new THREE.Group();
+const anchorPositions = [
+  [0,4,0], [3.5,2,0], [3.5,-1.5,2.5], [0,-3.5,2], [-3.5,-1.5,2.5], [-3.5,2,0], [0,-1.5,-4], [0,0,4.5]
+];
+anchorPositions.forEach((apos,i)=>{
+  const aStar = new THREE.Mesh(new THREE.SphereGeometry(0.3,32,32), new THREE.MeshStandardMaterial({ color:'#F5A623', emissive:'#F5A623', emissiveIntensity:3, roughness:0.1, metalness:0.9 }));
+  aStar.position.set(...apos);
+  constGroup.add(aStar);
+  const aGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:goldGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.8, color:'#F5A623' }));
+  aGlow.position.copy(aStar.position);
+  aGlow.scale.setScalar(2.2);
+  constGroup.add(aGlow);
+});
+// Small memory nodes
+for (let i=0;i<40;i++) {
+  const mNode = new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8), new THREE.MeshStandardMaterial({ color:'#E8893A', emissive:'#E8893A', emissiveIntensity:1.5, roughness:0.3 }));
+  const anchor = anchorPositions[Math.floor(Math.random()*8)];
+  const angle = Math.random()*Math.PI*2;
+  const r = 1+Math.random()*2.5;
+  mNode.position.set(anchor[0]+Math.cos(angle)*r, anchor[1]+(Math.random()-0.5)*2, anchor[2]+Math.sin(angle)*r);
+  constGroup.add(mNode);
+  const mGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:amberGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.5 }));
+  mGlow.position.copy(mNode.position);
+  mGlow.scale.setScalar(0.6);
+  constGroup.add(mGlow);
+}
+interiors.observatory.add(constGroup);
+
+// Drifting constellation dust — distinct from the fixed anchor stars/nodes
+const obsDustCount = IS_MOBILE ? 180 : 360;
+const obsDustGeo = new THREE.BufferGeometry();
+const obsDustPos = new Float32Array(obsDustCount*3);
+const obsDustMeta = [];
+for (let i=0;i<obsDustCount;i++) {
+  const a=Math.random()*Math.PI*2, r=1+Math.random()*7, h=(Math.random()-0.5)*8;
+  obsDustPos[i*3]=Math.cos(a)*r; obsDustPos[i*3+1]=h; obsDustPos[i*3+2]=Math.sin(a)*r;
+  obsDustMeta.push({ baseA:a, r, baseH:h, speed:0.015+Math.random()*0.03, phase:Math.random()*Math.PI*2 });
+}
+obsDustGeo.setAttribute('position', new THREE.BufferAttribute(obsDustPos,3));
+const obsDustMesh = new THREE.Points(obsDustGeo, new THREE.PointsMaterial({ color:'#F5A623', size:0.02, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.35 }));
+interiors.observatory.add(obsDustMesh);
+
+// ── Live Constellation Feed ──
+// Pulls the institution's most recent analyses from the backend and renders
+// them as live nodes inside the constellation, refreshed every 30s while the
+// Observatory is open. References constGroup directly (not children[0]) so
+// it can't break if the group's build order ever changes.
+let _constellationFetching = false;
+let _lastConstellationFetch = 0;
+
+function maybeFetchConstellation() {
+  if (!CONFIG.BACKEND_URL || _constellationFetching) return;
+  // No token = signed out. Skip rather than fire a request that will 401
+  // once the backend's demo mode is switched off.
+  if (!clerkToken) return;
+  const now = Date.now();
+  if (now - _lastConstellationFetch < 30000) return;
+  _constellationFetching = true;
+  _lastConstellationFetch = now;
+
+  fetch(`${CONFIG.BACKEND_URL}/constellation`, {
+    headers: { Authorization: `Bearer ${clerkToken}` },
+  })
+    .then(res => res.ok ? res.json() : Promise.reject(res.status))
+    .then(nodes => {
+      if (!interiors.observatory.visible || !Array.isArray(nodes)) return;
+
+      // Clear previously-rendered feed nodes/threads (leave the fixed
+      // anchor stars and decorative memory nodes untouched).
+      const toRemove = constGroup.children.filter(
+        c => c.userData && (c.userData.type === 'feedNode' || c.userData.type === 'feedThread')
+      );
+      toRemove.forEach(c => {
+        constGroup.remove(c);
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) c.material.dispose();
+      });
+
+      const placed = [];
+      nodes.forEach(node => {
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.06, 8, 8),
+          new THREE.MeshStandardMaterial({ color: '#E8893A', emissive: '#E8893A', emissiveIntensity: 1.8, roughness: 0.3 })
+        );
+        sphere.position.set(node.x, node.y, node.z);
+        sphere.userData = { type: 'feedNode', nodeData: node };
+        constGroup.add(sphere);
+        placed.push(sphere);
+
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: amberGlow, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.6
+        }));
+        glow.position.copy(sphere.position);
+        glow.scale.setScalar(0.5);
+        glow.userData = { type: 'feedNode' };
+        constGroup.add(glow);
+      });
+
+      // Thread together nodes that share a doctrine principle.
+      for (let i = 0; i < placed.length; i++) {
+        for (let j = i + 1; j < placed.length; j++) {
+          if (placed[i].userData.nodeData.principle_number === placed[j].userData.nodeData.principle_number) {
+            const geo = new THREE.BufferGeometry().setFromPoints([placed[i].position.clone(), placed[j].position.clone()]);
+            const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+              color: '#F5A623', transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            line.userData = { type: 'feedThread' };
+            constGroup.add(line);
+          }
+        }
+      }
+    })
+    .catch(() => { /* network/auth error — silently skip this cycle */ })
+    .finally(() => { _constellationFetching = false; });
+}
+
+scene.add(interiors.observatory);
+
+// ── THE ACADEMY: 8 Pillars Hall ──
+const PRINCIPLES = [
+  { n: 1, name: 'Structure Before Opinion', text: 'Placeholder doctrine text — replace with the real Principle 1 text before launch.' },
+  { n: 2, name: 'Patience as Edge', text: 'Placeholder doctrine text — replace with the real Principle 2 text before launch.' },
+  { n: 3, name: 'Structure as Language', text: 'Placeholder doctrine text — replace with the real Principle 3 text before launch.' },
+  { n: 4, name: 'The Market Remembers', text: 'Placeholder doctrine text — replace with the real Principle 4 text before launch.' },
+  { n: 5, name: 'Position as Conviction', text: 'Placeholder doctrine text — replace with the real Principle 5 text before launch.' },
+  { n: 6, name: 'Simplicity as Mastery', text: 'Placeholder doctrine text — replace with the real Principle 6 text before launch.' },
+  { n: 7, name: 'The Cycle Never Lies', text: 'Placeholder doctrine text — replace with the real Principle 7 text before launch.' },
+  { n: 8, name: 'Transformation Through Pressure', text: 'Placeholder doctrine text — replace with the real Principle 8 text before launch.' },
+];
+
+interiors.academy = new THREE.Group();
+interiors.academy.position.set(-22, 0, 0);
+interiors.academy.visible = false;
+
+const academyFloor = new THREE.Mesh(
+  new THREE.CircleGeometry(6.5, 64),
+  new THREE.MeshStandardMaterial({ color:'#080c14', roughness:0.3, metalness:0.6, emissive:'#050510', emissiveIntensity:0.2 })
+);
+academyFloor.rotation.x = -Math.PI/2;
+academyFloor.position.y = -2.5;
+interiors.academy.add(academyFloor);
+
+const pillarMeshes = [];
+const PILLAR_RADIUS = 5;
+PRINCIPLES.forEach((p, i) => {
+  const angle = (i / PRINCIPLES.length) * Math.PI * 2;
+  const x = Math.cos(angle) * PILLAR_RADIUS;
+  const z = Math.sin(angle) * PILLAR_RADIUS;
+
+  const pillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.3, 5, 24),
+    new THREE.MeshStandardMaterial({ color:'#F5A623', emissive:'#F5A623', emissiveIntensity:2.2, roughness:0.15, metalness:0.85 })
+  );
+  pillar.position.set(x, 0, z);
+  pillar.userData = { type:'pillar', principle:p, baseEmissive:2.2 };
+  interiors.academy.add(pillar);
+  pillarMeshes.push(pillar);
+
+  const pGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:softGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.55, color:'#F5A623' }));
+  pGlow.position.set(x, 1, z);
+  pGlow.scale.setScalar(3.2);
+  interiors.academy.add(pGlow);
+
+  const cap = new THREE.Mesh(
+    new THREE.SphereGeometry(0.34, 24, 24),
+    new THREE.MeshStandardMaterial({ color:'#FFD700', emissive:'#FFD700', emissiveIntensity:3, roughness:0.1, metalness:0.9 })
+  );
+  cap.position.set(x, 2.6, z);
+  interiors.academy.add(cap);
+
+  // A glowing rune partway up the pillar — one symbol per principle, not
+  // literal text, reusing labelTex() rather than building a new system
+  const RUNE_SYMBOLS = ['◆','▲','✦','●','◈','✶','◇','✷'];
+  const rune = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glyphTex(RUNE_SYMBOLS[i % RUNE_SYMBOLS.length], '#FFE9B0'), transparent:true, depthWrite:false, opacity:0.85
+  }));
+  rune.position.set(x * 0.92, 1.7, z * 0.92);
+  rune.scale.set(0.5, 0.5, 1);
+  interiors.academy.add(rune);
+});
+
+// Floating Doctrine Codex at center
+const codexGroup = new THREE.Group();
+const codex = new THREE.Mesh(
+  new THREE.OctahedronGeometry(0.55, 0),
+  new THREE.MeshStandardMaterial({ color:'#FFD700', emissive:'#FFD700', emissiveIntensity:2.6, roughness:0.1, metalness:0.9 })
+);
+codexGroup.add(codex);
+const codexGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:softGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.85, color:'#FFD700' }));
+codexGlow.scale.setScalar(3.5);
+codexGroup.add(codexGlow);
+codexGroup.position.set(0, 0.4, 0);
+interiors.academy.add(codexGroup);
+
+// Circuit-line floor, radiating from center to the pillar ring
+const academyCircuits = new THREE.Group();
+for (let i=0;i<20;i++) {
+  const angle = (i/20)*Math.PI*2;
+  const r1 = 1.2 + Math.random()*0.6, r2 = 5.2 + Math.random()*0.8;
+  const pts = [
+    new THREE.Vector3(Math.cos(angle)*r1, -2.49, Math.sin(angle)*r1),
+    new THREE.Vector3(Math.cos(angle)*r2, -2.49, Math.sin(angle)*r2),
+  ];
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color:'#F5A623', transparent:true, opacity:0.08, blending:THREE.AdditiveBlending, depthWrite:false }));
+  academyCircuits.add(line);
+}
+interiors.academy.add(academyCircuits);
+
+// Ambient particles
+const acpCount = IS_MOBILE ? 150 : 300;
+const acpGeo = new THREE.BufferGeometry();
+const acpPos = new Float32Array(acpCount*3);
+const acpMetaArr = [];
+for (let i=0;i<acpCount;i++) {
+  const a=Math.random()*Math.PI*2, r=0.5+Math.random()*6, h=-2+Math.random()*5;
+  acpPos[i*3]=Math.cos(a)*r; acpPos[i*3+1]=h; acpPos[i*3+2]=Math.sin(a)*r;
+  acpMetaArr.push({baseA:a, r, baseH:h, spd:0.08+Math.random()*0.25, vAmp:0.3+Math.random()*1, ph:Math.random()*Math.PI*2});
+}
+acpGeo.setAttribute('position', new THREE.BufferAttribute(acpPos,3));
+const acpMesh = new THREE.Points(acpGeo, new THREE.PointsMaterial({ color:'#E8893A', size:0.02, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.32 }));
+interiors.academy.add(acpMesh);
+
+// Drifting gold dust — finer and brighter than the ambient particles above,
+// distinct visual character to add room substance
+const academyDustCount = IS_MOBILE ? 100 : 200;
+const academyDustGeo = new THREE.BufferGeometry();
+const academyDustPos = new Float32Array(academyDustCount*3);
+const academyDustMeta = [];
+for (let i=0;i<academyDustCount;i++) {
+  const a=Math.random()*Math.PI*2, r=0.5+Math.random()*5.5, h=-2+Math.random()*6;
+  academyDustPos[i*3]=Math.cos(a)*r; academyDustPos[i*3+1]=h; academyDustPos[i*3+2]=Math.sin(a)*r;
+  academyDustMeta.push({ baseA:a, r, baseH:h, speed:0.02+Math.random()*0.04, phase:Math.random()*Math.PI*2 });
+}
+academyDustGeo.setAttribute('position', new THREE.BufferAttribute(academyDustPos,3));
+const academyDustMesh = new THREE.Points(academyDustGeo, new THREE.PointsMaterial({ color:'#FFD700', size:0.018, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.4 }));
+interiors.academy.add(academyDustMesh);
+
+scene.add(interiors.academy);
+
+// ── THE FORGE: Trial Vault Corridor ──
+const FORGE_DOORS = [
+  { n:1, name:'Initiate', quote:'You have entered. The Brain knows you are here.', requirement:'Offer 3 charts.', color:'#E8893A', glow:1.4, size:1.0 },
+  { n:2, name:'Student', quote:'You have begun to see structure.', requirement:'Show you can identify structure before outcome.', color:'#F5A623', glow:2.0, size:1.15 },
+  { n:3, name:'Practitioner', quote:'Structure is now your language.', requirement:'Offer charts where patience was the lesson.', color:'#F5A623', glow:2.8, size:1.3 },
+  { n:4, name:'Adept', quote:'You have been tested. You have not broken.', requirement:'Offer a chart where you were wrong.', color:'#FFD700', glow:3.6, size:1.45 },
+  { n:5, name:'Sovereign', quote:"You are now part of the Brain's memory.", requirement:'Your submissions teach others. The door is open.', color:'#FFFDE8', glow:4.6, size:1.65 },
+];
+// Kept under ~33 units long on purpose — the scene's existing fog (far:40)
+// would fully erase anything past 40 units from the camera, which would
+// have made the climactic fifth door invisible from the entrance.
+const FORGE_Z = [-5, -10, -16, -22, -29];
+
+interiors.forge = new THREE.Group();
+interiors.forge.position.set(0, 0, 50);
+interiors.forge.visible = false;
+
+const forgeFloor = new THREE.Mesh(
+  new THREE.BoxGeometry(3.2, 0.1, 33),
+  new THREE.MeshStandardMaterial({ color:'#080c14', roughness:0.4, metalness:0.5, emissive:'#050510', emissiveIntensity:0.2 })
+);
+forgeFloor.position.set(0, -1.65, -14.5);
+interiors.forge.add(forgeFloor);
+
+[[-1.5, 2, -1.5, -31], [1.5, 2, 1.5, -31]].forEach(([x1,z1,x2,z2]) => {
+  const rail = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x1,-1.59,z1), new THREE.Vector3(x2,-1.59,z2)]),
+    new THREE.LineBasicMaterial({ color:'#F5A623', transparent:true, opacity:0.15, blending:THREE.AdditiveBlending, depthWrite:false })
+  );
+  interiors.forge.add(rail);
+});
+
+const forgeDoorPlanes = [];
+const forgeDoors = [];
+FORGE_DOORS.forEach((d, i) => {
+  const z = FORGE_Z[i];
+  const w = 1.6 * d.size, h = 3.0 * d.size;
+
+  const doorGroup = new THREE.Group();
+  doorGroup.position.set(0, h/2 - 1.6, z);
+
+  const frameMat = new THREE.MeshStandardMaterial({ color:d.color, emissive:d.color, emissiveIntensity:d.glow, roughness:0.15, metalness:0.85 });
+  const postGeo = new THREE.BoxGeometry(0.12, h, 0.12);
+  const leftPost = new THREE.Mesh(postGeo, frameMat);
+  leftPost.position.set(-w/2, 0, 0);
+  doorGroup.add(leftPost);
+  const rightPost = new THREE.Mesh(postGeo, frameMat);
+  rightPost.position.set(w/2, 0, 0);
+  doorGroup.add(rightPost);
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(w+0.12, 0.12, 0.12), frameMat);
+  lintel.position.set(0, h/2, 0);
+  doorGroup.add(lintel);
+
+  const threshold = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ color:d.color, transparent:true, opacity:0.22, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })
+  );
+  threshold.userData = { type:'door', door:d };
+  doorGroup.add(threshold);
+  forgeDoorPlanes.push(threshold);
+
+  const dGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:softGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.5 + d.glow*0.08, color:d.color }));
+  dGlow.scale.setScalar(2.5 * d.size);
+  doorGroup.add(dGlow);
+
+  interiors.forge.add(doorGroup);
+  forgeDoors.push(doorGroup);
+});
+
+// Particle stream flowing the length of the corridor
+const forgeStreamCount = IS_MOBILE ? 60 : 120;
+const FORGE_START_Z = 2, FORGE_END_Z = -31;
+const forgeStreamGeo = new THREE.BufferGeometry();
+const forgeStreamPts = new Float32Array(forgeStreamCount*3);
+const forgeStreamMeta = [];
+for (let i=0;i<forgeStreamCount;i++) {
+  forgeStreamMeta.push({ t:i/forgeStreamCount, speed:0.04+Math.random()*0.05, offsetX:(Math.random()-0.5)*1.0, offsetY:(Math.random()-0.5)*0.6 - 0.8 });
+}
+forgeStreamGeo.setAttribute('position', new THREE.BufferAttribute(forgeStreamPts,3));
+const forgeStream = new THREE.Points(forgeStreamGeo, new THREE.PointsMaterial({ color:'#F5A623', size:0.03, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.5 }));
+interiors.forge.add(forgeStream);
+
+// More dramatic lighting — a warm light raking low across the doors,
+// distinct from their own emissive glow
+const forgeDramaLight = new THREE.PointLight('#FFB347', 8, 30, 1.3);
+forgeDramaLight.position.set(0, -0.8, FORGE_Z[1]);
+interiors.forge.add(forgeDramaLight);
+
+// Low mist hugging the floor — slow horizontal drift along the corridor
+const mistCount = IS_MOBILE ? 80 : 160;
+const mistGeo = new THREE.BufferGeometry();
+const mistPos = new Float32Array(mistCount*3);
+const mistMeta = [];
+for (let i=0;i<mistCount;i++) {
+  const x=(Math.random()-0.5)*3, z=FORGE_START_Z + Math.random()*(FORGE_END_Z-FORGE_START_Z);
+  mistPos[i*3]=x; mistPos[i*3+1]=-1.5; mistPos[i*3+2]=z;
+  mistMeta.push({ baseX:x, baseZ:z, speed:0.05+Math.random()*0.08, phase:Math.random()*Math.PI*2 });
+}
+mistGeo.setAttribute('position', new THREE.BufferAttribute(mistPos,3));
+const mistMesh = new THREE.Points(mistGeo, new THREE.PointsMaterial({ color:'#8a8478', size:0.18, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.12, sizeAttenuation:true }));
+interiors.forge.add(mistMesh);
+
+// Drifting gold dust along the corridor — distinct from the grey mist and
+// the gold stream, finer and more numerous
+const forgeDustCount = IS_MOBILE ? 100 : 200;
+const forgeDustGeo = new THREE.BufferGeometry();
+const forgeDustPos = new Float32Array(forgeDustCount*3);
+const forgeDustMeta = [];
+for (let i=0;i<forgeDustCount;i++) {
+  const x=(Math.random()-0.5)*3.2, y=-1.4+Math.random()*4, z=FORGE_START_Z + Math.random()*(FORGE_END_Z-FORGE_START_Z);
+  forgeDustPos[i*3]=x; forgeDustPos[i*3+1]=y; forgeDustPos[i*3+2]=z;
+  forgeDustMeta.push({ baseX:x, baseY:y, baseZ:z, speed:0.03+Math.random()*0.05, phase:Math.random()*Math.PI*2 });
+}
+forgeDustGeo.setAttribute('position', new THREE.BufferAttribute(forgeDustPos,3));
+const forgeDustMesh = new THREE.Points(forgeDustGeo, new THREE.PointsMaterial({ color:'#FFD700', size:0.018, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.4 }));
+interiors.forge.add(forgeDustMesh);
+
+scene.add(interiors.forge);
+
+// ── THE THRESHOLD: the Oath ──
+const OATH_LINES = [
+  'I enter knowing the market will reveal me.',
+  'I do not seek shortcuts.',
+  'I do not hide from correction.',
+  'I respect the process before the outcome.',
+  'My discipline is my edge.',
+  'My decisions define my journey.',
+  'Trading is the test.',
+  'Transformation is the product.',
+];
+const THRESHOLD_LIGHT_LOCAL = new THREE.Vector3(0, 0, -55);
+
+interiors.threshold = new THREE.Group();
+interiors.threshold.position.set(60, 0, 0);
+interiors.threshold.visible = false;
+
+const thresholdLight = new THREE.Mesh(
+  new THREE.SphereGeometry(0.5, 32, 32),
+  new THREE.MeshStandardMaterial({ color:'#FFFDE8', emissive:'#FFFDE8', emissiveIntensity:3, roughness:0.05, metalness:0.9 })
+);
+thresholdLight.position.copy(THRESHOLD_LIGHT_LOCAL);
+interiors.threshold.add(thresholdLight);
+
+const thresholdLightGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:softGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.85, color:'#FFD700' }));
+thresholdLightGlow.position.copy(THRESHOLD_LIGHT_LOCAL);
+thresholdLightGlow.scale.setScalar(3);
+interiors.threshold.add(thresholdLightGlow);
+
+const THRESHOLD_BURST_COUNT = IS_MOBILE ? 80 : 160;
+const thresholdBurstGeo = new THREE.BufferGeometry();
+const thresholdBurstPos = new Float32Array(THRESHOLD_BURST_COUNT*3);
+const thresholdBurstStart = [];
+for (let i=0;i<THRESHOLD_BURST_COUNT;i++) {
+  thresholdBurstStart.push(new THREE.Vector3());
+}
+thresholdBurstGeo.setAttribute('position', new THREE.BufferAttribute(thresholdBurstPos,3));
+const thresholdBurstMat = new THREE.PointsMaterial({ color:'#F5A623', size:0.05, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0 });
+const thresholdBurst = new THREE.Points(thresholdBurstGeo, thresholdBurstMat);
+interiors.threshold.add(thresholdBurst);
+
+// Faint ambient particles present throughout the Oath, not just the final
+// burst — scattered along the approach toward the light
+const thresholdAmbientCount = IS_MOBILE ? 100 : 200;
+const thresholdAmbientGeo = new THREE.BufferGeometry();
+const thresholdAmbientPos = new Float32Array(thresholdAmbientCount*3);
+const thresholdAmbientMeta = [];
+for (let i=0;i<thresholdAmbientCount;i++) {
+  const x=(Math.random()-0.5)*8, y=(Math.random()-0.5)*5, z=2-Math.random()*58;
+  thresholdAmbientPos[i*3]=x; thresholdAmbientPos[i*3+1]=y; thresholdAmbientPos[i*3+2]=z;
+  thresholdAmbientMeta.push({ baseX:x, baseY:y, baseZ:z, speed:0.04+Math.random()*0.06, phase:Math.random()*Math.PI*2 });
+}
+thresholdAmbientGeo.setAttribute('position', new THREE.BufferAttribute(thresholdAmbientPos,3));
+const thresholdAmbientMesh = new THREE.Points(thresholdAmbientGeo, new THREE.PointsMaterial({ color:'#F5A623', size:0.025, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.28 }));
+interiors.threshold.add(thresholdAmbientMesh);
+
+let thresholdBurstActive = false;
+let thresholdBurstT = 0;
+
+function burstThresholdParticles() {
+  thresholdBurstActive = true;
+  thresholdBurstT = 0;
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+  const originWorld = camera.position.clone().add(camDir.multiplyScalar(8));
+  const originLocal = interiors.threshold.worldToLocal(originWorld);
+  for (let i=0;i<THRESHOLD_BURST_COUNT;i++) {
+    thresholdBurstStart[i].set(
+      originLocal.x + (Math.random()-0.5)*4,
+      originLocal.y + (Math.random()-0.5)*2,
+      originLocal.z + (Math.random()-0.5)*2
+    );
+  }
+}
+
+scene.add(interiors.threshold);
+
+// ── THE LOUNGE: Wall of Names ──
+const MEMBERS = [
+  {
+    "name": "Marcus Vale",
+    "rank": "Initiate",
+    "charts_offered": 3,
+    "insight": "Learned that observation must come before reaction and that the market rewards patience over impulse."
+  },
+  {
+    "name": "Amara Ellis",
+    "rank": "Initiate",
+    "charts_offered": 5,
+    "insight": "Discovered that every candle carries information when viewed through structure and context."
+  },
+  {
+    "name": "Daniel Rivers",
+    "rank": "Initiate",
+    "charts_offered": 2,
+    "insight": "Realized that discipline begins before the trade and continues after the decision."
+  },
+  {
+    "name": "Jordan Hayes",
+    "rank": "Initiate",
+    "charts_offered": 4,
+    "insight": "Understood that simplicity creates clarity when emotions attempt to create noise."
+  },
+  {
+    "name": "Ethan Cole",
+    "rank": "Initiate",
+    "charts_offered": 1,
+    "insight": "Started seeing the market as a language instead of a guessing game."
+  },
+  {
+    "name": "Sophia Grant",
+    "rank": "Initiate",
+    "charts_offered": 5,
+    "insight": "Learned that the first step in growth is admitting what must be improved."
+  },
+  {
+    "name": "Noah Bennett",
+    "rank": "Initiate",
+    "charts_offered": 3,
+    "insight": "Discovered that consistency is built through repeated intentional choices."
+  },
+  {
+    "name": "Layla Morgan",
+    "rank": "Initiate",
+    "charts_offered": 2,
+    "insight": "Recognized that pressure reveals character before it reveals results."
+  },
+  {
+    "name": "Caleb Turner",
+    "rank": "Initiate",
+    "charts_offered": 4,
+    "insight": "Learned that respecting structure prevents emotional decisions."
+  },
+  {
+    "name": "Maya Brooks",
+    "rank": "Initiate",
+    "charts_offered": 5,
+    "insight": "Understood that every mistake can become a lesson when reviewed honestly."
+  },
+  {
+    "name": "Adrian Wells",
+    "rank": "Initiate",
+    "charts_offered": 3,
+    "insight": "Started building awareness that the market exposes habits and mindset."
+  },
+  {
+    "name": "Nia Carter",
+    "rank": "Initiate",
+    "charts_offered": 1,
+    "insight": "Learned that patience is an active skill, not passive waiting."
+  },
+  {
+    "name": "Ryan Foster",
+    "rank": "Initiate",
+    "charts_offered": 4,
+    "insight": "Discovered that confidence comes from preparation rather than prediction."
+  },
+  {
+    "name": "Elena Cross",
+    "rank": "Initiate",
+    "charts_offered": 2,
+    "insight": "Recognized that the trader must master themselves before mastering the chart."
+  },
+  {
+    "name": "Darius King",
+    "rank": "Initiate",
+    "charts_offered": 5,
+    "insight": "Learned that process creates freedom while emotion creates limitations."
+  },
+  {
+    "name": "Avery Stone",
+    "rank": "Initiate",
+    "charts_offered": 3,
+    "insight": "Understood that every decision leaves a lesson for future growth."
+  },
+  {
+    "name": "Liam Parker",
+    "rank": "Initiate",
+    "charts_offered": 2,
+    "insight": "Started seeing losses as information instead of identity."
+  },
+  {
+    "name": "Zoe Mitchell",
+    "rank": "Initiate",
+    "charts_offered": 4,
+    "insight": "Learned that the cycle of review and correction creates mastery."
+  },
+  {
+    "name": "Isaiah Reed",
+    "rank": "Initiate",
+    "charts_offered": 1,
+    "insight": "Recognized that the market rewards those who respect timing."
+  },
+  {
+    "name": "Chloe Adams",
+    "rank": "Initiate",
+    "charts_offered": 5,
+    "insight": "Discovered that discipline is the foundation behind every consistent outcome."
+  },
+  {
+    "name": "Marcus Holloway",
+    "rank": "Student",
+    "charts_offered": 8,
+    "insight": "Learned that structure provides confidence before execution."
+  },
+  {
+    "name": "Aaliyah Brooks",
+    "rank": "Student",
+    "charts_offered": 14,
+    "insight": "Understood that market memory connects present decisions with previous behavior."
+  },
+  {
+    "name": "Nathan Cole",
+    "rank": "Student",
+    "charts_offered": 11,
+    "insight": "Discovered that emotional control is built through repeated awareness."
+  },
+  {
+    "name": "Grace Bennett",
+    "rank": "Student",
+    "charts_offered": 17,
+    "insight": "Learned that patience allows opportunities to reveal themselves naturally."
+  },
+  {
+    "name": "Julian Hayes",
+    "rank": "Student",
+    "charts_offered": 9,
+    "insight": "Recognized that simplicity creates mastery when complexity distracts."
+  },
+  {
+    "name": "Isabella Stone",
+    "rank": "Student",
+    "charts_offered": 20,
+    "insight": "Understood that every chart is a conversation between structure and psychology."
+  },
+  {
+    "name": "Elias Carter",
+    "rank": "Student",
+    "charts_offered": 7,
+    "insight": "Learned that improvement comes from honest reflection after every decision."
+  },
+  {
+    "name": "Naomi Wells",
+    "rank": "Student",
+    "charts_offered": 13,
+    "insight": "Discovered that consistency is created through alignment with the process."
+  },
+  {
+    "name": "Cameron Reed",
+    "rank": "Student",
+    "charts_offered": 16,
+    "insight": "Learned that risk management protects clarity and long-term growth."
+  },
+  {
+    "name": "Hannah Brooks",
+    "rank": "Student",
+    "charts_offered": 12,
+    "insight": "Recognized that mastery comes from understanding why before acting."
+  },
+  {
+    "name": "Malik Johnson",
+    "rank": "Student",
+    "charts_offered": 18,
+    "insight": "Understood that the market reveals internal habits through external movement."
+  },
+  {
+    "name": "Olivia Grant",
+    "rank": "Student",
+    "charts_offered": 10,
+    "insight": "Learned that preparation creates confidence under pressure."
+  },
+  {
+    "name": "Samuel Wright",
+    "rank": "Student",
+    "charts_offered": 15,
+    "insight": "Discovered that discipline separates intention from execution."
+  },
+  {
+    "name": "Victoria Lane",
+    "rank": "Student",
+    "charts_offered": 6,
+    "insight": "Recognized that every correction strengthens future decisions."
+  },
+  {
+    "name": "Theo Morgan",
+    "rank": "Student",
+    "charts_offered": 19,
+    "insight": "Learned that growth comes from mastering the process, not chasing outcomes."
+  },
+  {
+    "name": "Andre Lawson",
+    "rank": "Practitioner",
+    "charts_offered": 34,
+    "insight": "Developed the ability to connect market structure with psychological awareness."
+  },
+  {
+    "name": "Camila Torres",
+    "rank": "Practitioner",
+    "charts_offered": 42,
+    "insight": "Learned that execution improves when preparation and patience become automatic."
+  },
+  {
+    "name": "Benjamin Scott",
+    "rank": "Practitioner",
+    "charts_offered": 27,
+    "insight": "Understood that patterns gain meaning only when aligned with context."
+  },
+  {
+    "name": "Sienna Brooks",
+    "rank": "Practitioner",
+    "charts_offered": 49,
+    "insight": "Recognized that mastery comes from repeating correct decisions under pressure."
+  },
+  {
+    "name": "Dominic Hayes",
+    "rank": "Practitioner",
+    "charts_offered": 31,
+    "insight": "Learned that the trader's greatest edge is controlled decision making."
+  },
+  {
+    "name": "Ariana Wells",
+    "rank": "Practitioner",
+    "charts_offered": 45,
+    "insight": "Discovered that market cycles repeat because human behavior repeats."
+  },
+  {
+    "name": "Xavier Reed",
+    "rank": "Practitioner",
+    "charts_offered": 38,
+    "insight": "Understood that discipline transforms knowledge into consistent action."
+  },
+  {
+    "name": "Mila Carter",
+    "rank": "Practitioner",
+    "charts_offered": 22,
+    "insight": "Learned that every market condition requires awareness before response."
+  },
+  {
+    "name": "Leon Grant",
+    "rank": "Adept",
+    "charts_offered": 68,
+    "insight": "Developed the ability to teach principles rather than only setups."
+  },
+  {
+    "name": "Serena Vale",
+    "rank": "Adept",
+    "charts_offered": 91,
+    "insight": "Understood that true mastery is transferring knowledge through lineage."
+  },
+  {
+    "name": "Marcus Reed",
+    "rank": "Adept",
+    "charts_offered": 57,
+    "insight": "Recognized that consistency is created by protecting the process."
+  },
+  {
+    "name": "Amara Stone",
+    "rank": "Adept",
+    "charts_offered": 83,
+    "insight": "Learned that pressure reveals the strength of preparation and character."
+  },
+  {
+    "name": "Julian Cross",
+    "rank": "Adept",
+    "charts_offered": 74,
+    "insight": "Discovered that mastery comes from seeing the whole system, not isolated moments."
+  },
+  {
+    "name": "Elias Monroe",
+    "rank": "Sovereign",
+    "charts_offered": 146,
+    "insight": "Understood that the highest responsibility is preserving knowledge and developing others."
+  },
+  {
+    "name": "Sophia Bennett",
+    "rank": "Sovereign",
+    "charts_offered": 203,
+    "insight": "Recognized that true legacy is measured by the transformation created in others."
+  }
+];
+
+const WALL_RADIUS = 11;
+const ARC_HALF = 1.05;
+const RANK_TIERS = ['Initiate','Student','Practitioner','Adept','Sovereign'];
+const RANK_Y = { Initiate:-3.5, Student:-1.5, Practitioner:0.5, Adept:2.5, Sovereign:4.5 };
+const RANK_SCALE = { Initiate:0.85, Student:1.0, Practitioner:1.2, Adept:1.4, Sovereign:1.7 };
+const RANK_COLOR = { Initiate:'#E8893A', Student:'#F0A84A', Practitioner:'#F5A623', Adept:'#FFD700', Sovereign:'#FFFDE8' };
+
+interiors.lounge = new THREE.Group();
+interiors.lounge.position.set(0, 0, -90);
+interiors.lounge.visible = false;
+
+// Warm floor — deliberately warmer-toned than the other districts' floors
+const loungeFloor = new THREE.Mesh(
+  new THREE.CircleGeometry(13, 64),
+  new THREE.MeshStandardMaterial({ color:'#0c0a08', roughness:0.35, metalness:0.55, emissive:'#1a0f06', emissiveIntensity:0.3 })
+);
+loungeFloor.rotation.x = -Math.PI/2;
+loungeFloor.position.y = -4.2;
+interiors.lounge.add(loungeFloor);
+
+// A real light source local to this district — gives everything in here an
+// amber cast instead of relying on the cool global ambient light alone.
+// Scoped: it's a child of this group, so it has no effect on other districts.
+const loungeWarmLight = new THREE.PointLight('#E8893A', 9, 26, 1.1);
+loungeWarmLight.position.set(0, 1, -4);
+interiors.lounge.add(loungeWarmLight);
+
+// Columns flanking the wall — turns "names floating in a void" into "the
+// centerpiece of a hall"
+const loungeColumnMat = new THREE.MeshStandardMaterial({ color:'#E8893A', emissive:'#E8893A', emissiveIntensity:1.1, roughness:0.3, metalness:0.6 });
+const LOUNGE_COLUMN_COUNT = 6;
+for (let i=0;i<LOUNGE_COLUMN_COUNT;i++) {
+  const angle = -ARC_HALF*1.3 + (i/(LOUNGE_COLUMN_COUNT-1))*ARC_HALF*2.6;
+  const r = WALL_RADIUS + 2.5;
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 9, 16), loungeColumnMat);
+  col.position.set(Math.sin(angle)*r, 0.3, -Math.cos(angle)*r);
+  interiors.lounge.add(col);
+}
+
+// Domed ceiling suggestion — rim deliberately well below the floor line so
+// it never visually bisects the wall of names above it.
+const loungeDome = new THREE.Mesh(
+  new THREE.SphereGeometry(16, 32, 24, 0, Math.PI*2, 0, Math.PI*0.75),
+  new THREE.MeshStandardMaterial({ color:'#1a0f06', roughness:0.9, metalness:0.1, emissive:'#0c0603', emissiveIntensity:0.4, side:THREE.BackSide })
+);
+loungeDome.position.y = 4;
+interiors.lounge.add(loungeDome);
+
+// Abstract glowing figures — simple geometric forms suggesting quiet
+// presence in the hall, not literal people
+const loungeFigures = [];
+const LOUNGE_FIGURE_COUNT = 9;
+for (let i=0;i<LOUNGE_FIGURE_COUNT;i++) {
+  const angle = Math.random()*Math.PI*2;
+  const r = 2.5 + Math.random()*5.5;
+  const fig = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.28, 1.3, 4, 8),
+    new THREE.MeshStandardMaterial({ color:'#F5A623', emissive:'#F5A623', emissiveIntensity:0.9, roughness:0.4, metalness:0.3, transparent:true, opacity:0.35 })
+  );
+  fig.position.set(Math.cos(angle)*r, -3.5, Math.sin(angle)*r);
+  fig.userData = { baseY: fig.position.y, phase: Math.random()*Math.PI*2, speed: 0.15+Math.random()*0.2 };
+  interiors.lounge.add(fig);
+  loungeFigures.push(fig);
+  const figGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:amberGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.4 }));
+  figGlow.position.copy(fig.position);
+  figGlow.scale.setScalar(1.6);
+  fig.userData.glowSprite = figGlow;
+  interiors.lounge.add(figGlow);
+}
+
+const memberSprites = [];
+const byRank = {};
+RANK_TIERS.forEach(r => byRank[r] = []);
+MEMBERS.forEach(m => byRank[m.rank].push(m));
+
+RANK_TIERS.forEach(rank => {
+  const group = byRank[rank];
+  const y = RANK_Y[rank];
+  const s = RANK_SCALE[rank];
+  const n = group.length;
+  group.forEach((m, i) => {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const angle = -ARC_HALF + t * (ARC_HALF * 2);
+    const x = Math.sin(angle) * WALL_RADIUS;
+    const z = -Math.cos(angle) * WALL_RADIUS;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: labelTex(m.name, RANK_COLOR[rank]), transparent:true, depthWrite:false, opacity:0.92
+    }));
+    sprite.position.set(x, y + (Math.random()-0.5)*0.3, z);
+    sprite.scale.set(2.0*s, 0.5*s, 1);
+    sprite.userData = { type:'member', member:m };
+    interiors.lounge.add(sprite);
+    memberSprites.push(sprite);
+  });
+});
+
+// Ambient drifting particles around the wall
+const lpCount = IS_MOBILE ? 220 : 440;
+const lpGeo = new THREE.BufferGeometry();
+const lpPos = new Float32Array(lpCount*3);
+const lpMetaArr = [];
+for (let i=0;i<lpCount;i++) {
+  const a = -ARC_HALF*1.4 + Math.random()*ARC_HALF*2.8;
+  const r = 4 + Math.random()*10;
+  const h = -5 + Math.random()*11;
+  lpPos[i*3]=Math.sin(a)*r; lpPos[i*3+1]=h; lpPos[i*3+2]=-Math.cos(a)*r;
+  lpMetaArr.push({ baseA:a, r, baseH:h, spd:0.04+Math.random()*0.12, vAmp:0.3+Math.random()*0.8, ph:Math.random()*Math.PI*2 });
+}
+lpGeo.setAttribute('position', new THREE.BufferAttribute(lpPos,3));
+const lpMesh = new THREE.Points(lpGeo, new THREE.PointsMaterial({ color:'#E8893A', size:0.025, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.4 }));
+interiors.lounge.add(lpMesh);
+
+// Drifting gold dust through the hall — distinct from the amber ambient
+// particles above, finer and brighter
+const loungeDustCount = IS_MOBILE ? 100 : 200;
+const loungeDustGeo = new THREE.BufferGeometry();
+const loungeDustPos = new Float32Array(loungeDustCount*3);
+const loungeDustMeta = [];
+for (let i=0;i<loungeDustCount;i++) {
+  const a = -ARC_HALF*1.4 + Math.random()*ARC_HALF*2.8;
+  const r = 1 + Math.random()*10;
+  const h = -4 + Math.random()*9;
+  loungeDustPos[i*3]=Math.sin(a)*r; loungeDustPos[i*3+1]=h; loungeDustPos[i*3+2]=-Math.cos(a)*r;
+  loungeDustMeta.push({ baseA:a, r, baseH:h, speed:0.02+Math.random()*0.04, phase:Math.random()*Math.PI*2 });
+}
+loungeDustGeo.setAttribute('position', new THREE.BufferAttribute(loungeDustPos,3));
+const loungeDustMesh = new THREE.Points(loungeDustGeo, new THREE.PointsMaterial({ color:'#FFD700', size:0.018, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.4 }));
+interiors.lounge.add(loungeDustMesh);
+
+scene.add(interiors.lounge);
+
+// ── COUNCIL CHAMBER: Founder's Table + Dispatch Room ──
+interiors.council = new THREE.Group();
+interiors.council.position.set(-90, 0, 0);
+interiors.council.visible = false;
+
+const councilFloor = new THREE.Mesh(
+  new THREE.CircleGeometry(7, 64),
+  new THREE.MeshStandardMaterial({ color:'#080c14', roughness:0.3, metalness:0.6, emissive:'#050510', emissiveIntensity:0.2 })
+);
+councilFloor.rotation.x = -Math.PI/2;
+councilFloor.position.y = -1.8;
+interiors.council.add(councilFloor);
+
+// Founder's Table
+const tableTop = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.4, 2.5, 0.25, 48),
+  new THREE.MeshStandardMaterial({ color:'#F5A623', emissive:'#F5A623', emissiveIntensity:1.6, roughness:0.2, metalness:0.85 })
+);
+tableTop.position.set(0, -0.5, 0);
+interiors.council.add(tableTop);
+
+const tableBase = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.5, 0.7, 1.2, 24),
+  new THREE.MeshStandardMaterial({ color:'#0a0e1a', roughness:0.5, metalness:0.5, emissive:'#050510', emissiveIntensity:0.2 })
+);
+tableBase.position.set(0, -1.3, 0);
+interiors.council.add(tableBase);
+
+const tableGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:softGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.6, color:'#F5A623' }));
+tableGlow.position.set(0, -0.4, 0);
+tableGlow.scale.setScalar(6);
+interiors.council.add(tableGlow);
+
+const tableGlowOuter = new THREE.Sprite(new THREE.SpriteMaterial({ map:softGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.22, color:'#FFD27A' }));
+tableGlowOuter.position.set(0, -0.4, 0);
+tableGlowOuter.scale.setScalar(11);
+interiors.council.add(tableGlowOuter);
+
+// Gold-bound volumes around the perimeter
+const councilVolumes = [];
+const VOLUME_COUNT = 14;
+for (let i=0;i<VOLUME_COUNT;i++) {
+  const angle = (i/VOLUME_COUNT)*Math.PI*2;
+  const r = 5.6;
+  const vol = new THREE.Mesh(
+    new THREE.BoxGeometry(0.32, 0.45, 0.08),
+    new THREE.MeshStandardMaterial({ color:'#E8893A', emissive:'#E8893A', emissiveIntensity:1.3, roughness:0.25, metalness:0.7 })
+  );
+  vol.position.set(Math.cos(angle)*r, 0.2 + Math.sin(i*1.7)*0.3, Math.sin(angle)*r);
+  vol.rotation.y = -angle + Math.PI/2;
+  vol.userData = { baseY: vol.position.y, phase: i*0.6 };
+  interiors.council.add(vol);
+  councilVolumes.push(vol);
+}
+
+// Dispatch Room — a viewing-screen alcove, presence only, no interaction
+const dispatchGroup = new THREE.Group();
+dispatchGroup.position.set(-5.5, 0.6, -1.5);
+dispatchGroup.rotation.y = Math.PI/2.3;
+
+const frameMat2 = new THREE.MeshStandardMaterial({ color:'#F5A623', emissive:'#F5A623', emissiveIntensity:1.8, roughness:0.2, metalness:0.8 });
+const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.08), frameMat2);
+leftFrame.position.set(-1.3, 0, 0);
+dispatchGroup.add(leftFrame);
+const rightFrame = leftFrame.clone();
+rightFrame.position.set(1.3, 0, 0);
+dispatchGroup.add(rightFrame);
+const topFrame = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.08, 0.08), frameMat2);
+topFrame.position.set(0, 0.8, 0);
+dispatchGroup.add(topFrame);
+const bottomFrame = topFrame.clone();
+bottomFrame.position.set(0, -0.8, 0);
+dispatchGroup.add(bottomFrame);
+
+const dispatchScreen = new THREE.Mesh(
+  new THREE.PlaneGeometry(2.5, 1.5),
+  new THREE.MeshBasicMaterial({ color:'#F5A623', transparent:true, opacity:0.25, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })
+);
+dispatchGroup.add(dispatchScreen);
+const dispatchGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:goldGlow, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.5, color:'#F5A623' }));
+dispatchGlow.scale.setScalar(3);
+dispatchGroup.add(dispatchGlow);
+interiors.council.add(dispatchGroup);
+
+// Ambient particles
+const ccpCount = IS_MOBILE ? 140 : 280;
+const ccpGeo = new THREE.BufferGeometry();
+const ccpPos = new Float32Array(ccpCount*3);
+const ccpMetaArr = [];
+for (let i=0;i<ccpCount;i++) {
+  const a=Math.random()*Math.PI*2, r=1+Math.random()*6, h=-1.5+Math.random()*3.5;
+  ccpPos[i*3]=Math.cos(a)*r; ccpPos[i*3+1]=h; ccpPos[i*3+2]=Math.sin(a)*r;
+  ccpMetaArr.push({baseA:a, r, baseH:h, spd:0.02+Math.random()*0.07, vAmp:0.2+Math.random()*0.6, ph:Math.random()*Math.PI*2});
+}
+ccpGeo.setAttribute('position', new THREE.BufferAttribute(ccpPos,3));
+const ccpMesh = new THREE.Points(ccpGeo, new THREE.PointsMaterial({ color:'#F5A623', size:0.02, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.3 }));
+interiors.council.add(ccpMesh);
+
+scene.add(interiors.council);
+
+// ═══════════════════════════════════════════════
+// NAVIGATION LOGIC
+// ═══════════════════════════════════════════════
+function navigateTo(districtId, fromPresentation = false) {
+  if (PRESENTATION.active && !fromPresentation) return;
+  if (isTransitioning) return;
+  isTransitioning = true;
+
+  // Universal: the Threshold is the only district that hides the starfield
+  // and runs the oath sequence — cancel/hide it whenever we leave, every time.
+  stars.visible = (districtId !== 'threshold');
+  if (districtId !== 'threshold') cancelOathSequence();
+  if (districtId !== 'lounge') hideTribePanel();
+  if (fromPresentation) duckMasterAudio();
+
+  // Fade out
+  fadeOverlay.classList.add('active');
+
+  setTimeout(() => {
+    setAudioProfile(districtId);
+    if (fromPresentation) restoreMasterAudio();
+
+    // Either snaps instantly (normal click navigation — unchanged feel) or
+    // tweens smoothly (presentation mode — fixes the old freeze-prone
+    // per-frame target nudge, and gives every move a real ease-in/ease-out).
+    function setOrTweenCamera(pos, target) {
+      if (fromPresentation) {
+        presentationTweenCamera(pos, target, CONFIG.PRESENTATION_TIMINGS.cameraTweenMs);
+      } else {
+        camera.position.copy(pos);
+        controls.target.copy(target);
+        controls.update();
+      }
+    }
+
+    // Switch visibility
+    if (districtId === 'galaxy') {
+      galaxyGroup.visible = true;
+      Object.values(interiors).forEach(g => g.visible = false);
+      currentDistrict = null;
+      locationText.textContent = 'INSTITUTION · GALAXY OVERVIEW';
+      backBtn.classList.remove('visible');
+      legend.classList.remove('hidden');
+      uploadOverlay.classList.remove('active');
+      responseContainer.classList.remove('visible');
+      // Reset camera to overview
+      setOrTweenCamera(new THREE.Vector3(0, 3, 14), new THREE.Vector3(0, 0, 0));
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.2;
+      controls.minDistance = 3;
+      controls.maxDistance = 30;
+    } else {
+      galaxyGroup.visible = false;
+      Object.entries(interiors).forEach(([id, group]) => {
+        group.visible = (id === districtId);
+      });
+      currentDistrict = districtId;
+      const d = districts.find(dd => dd.id === districtId);
+      locationText.textContent = `INSTITUTION · ${d ? d.name.toUpperCase() : ''}`;
+      backBtn.classList.add('visible');
+      legend.classList.add('hidden');
+
+      if (districtId === 'floor') {
+        uploadOverlay.classList.add('active');
+        responseContainer.classList.remove('visible');
+        // FIXED by Claude: original used camera y=0.3 / target y=0.5, z=-20 — both stayed
+        // near world-origin height while the entire chamber group sits at y=-20, so the
+        // camera was looking at empty space, not the altar. Anchoring to the group's own
+        // position keeps this correct even if the group is moved later.
+        setOrTweenCamera(
+          new THREE.Vector3(0, interiors.floor.position.y + 1.3, 5.5),
+          new THREE.Vector3(0, interiors.floor.position.y + 1, 0)
+        );
+        controls.autoRotate = false;
+        controls.minDistance = 2;
+        controls.maxDistance = 8;
+      } else if (districtId === 'observatory') {
+        uploadOverlay.classList.remove('active');
+        setOrTweenCamera(new THREE.Vector3(22, 1.5, 6), new THREE.Vector3(22, 0, 0));
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.15;
+        controls.minDistance = 2;
+        controls.maxDistance = 12;
+      } else if (districtId === 'academy') {
+        uploadOverlay.classList.remove('active');
+        setOrTweenCamera(new THREE.Vector3(-22, 1.2, 7), new THREE.Vector3(-22, -0.5, 0));
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.12;
+        controls.minDistance = 3;
+        controls.maxDistance = 14;
+      } else if (districtId === 'forge') {
+        uploadOverlay.classList.remove('active');
+        setOrTweenCamera(
+          new THREE.Vector3(0, -1.0, interiors.forge.position.z + 4),
+          new THREE.Vector3(0, -1.0, interiors.forge.position.z - 16)
+        );
+        controls.autoRotate = false;
+        controls.minDistance = 2;
+        controls.maxDistance = 25;
+      } else if (districtId === 'threshold') {
+        uploadOverlay.classList.remove('active');
+        setOrTweenCamera(
+          new THREE.Vector3(interiors.threshold.position.x, 0, interiors.threshold.position.z + 5),
+          new THREE.Vector3(interiors.threshold.position.x, 0, interiors.threshold.position.z - 55)
+        );
+        controls.autoRotate = false;
+        controls.minDistance = 4;
+        controls.maxDistance = 65;
+        startOathSequence();
+      } else if (districtId === 'lounge') {
+        uploadOverlay.classList.remove('active');
+        setOrTweenCamera(
+          new THREE.Vector3(interiors.lounge.position.x, 0.5, interiors.lounge.position.z),
+          new THREE.Vector3(interiors.lounge.position.x, 0.5, interiors.lounge.position.z - WALL_RADIUS)
+        );
+        controls.autoRotate = false;
+        controls.minDistance = 3;
+        controls.maxDistance = 16;
+        showTribePanel();
+      } else if (districtId === 'council') {
+        uploadOverlay.classList.remove('active');
+        setOrTweenCamera(
+          new THREE.Vector3(interiors.council.position.x, 1.6, interiors.council.position.z + 4.5),
+          new THREE.Vector3(interiors.council.position.x, -0.4, interiors.council.position.z)
+        );
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.08;
+        controls.minDistance = 2.5;
+        controls.maxDistance = 12;
+      } else {
+        uploadOverlay.classList.remove('active');
+        setOrTweenCamera(
+          new THREE.Vector3(interiors[districtId].position.x, interiors[districtId].position.y+2, interiors[districtId].position.z+5),
+          interiors[districtId].position.clone()
+        );
+        controls.autoRotate = true;
+      }
+    }
+
+    updateNavActiveState(districtId === 'galaxy' ? null : districtId);
+    updateNavVisibility();
+    updateSignInButton();
+    updateActivityTickerVisibility();
+    updateAskBarVisibility();
+
+    // Fade in
+    setTimeout(() => {
+      fadeOverlay.classList.remove('active');
+      isTransitioning = false;
+    }, 300);
+  }, 600);
+}
+
+backBtn.addEventListener('click', () => navigateTo('galaxy'));
+
+// Sign-in button — opens Clerk's modal. stopPropagation so the click can't
+// fall through to the canvas/district raycaster underneath it.
+document.getElementById('signInBtn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  await clerkReady;
+  if (window.Clerk) window.Clerk.openSignIn();
+});
+
+// ═══════════════════════════════════════════════
+// RAYCASTER FOR GALAXY MAP CLICKS
+// ═══════════════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = 0.5;
+const mouse = new THREE.Vector2();
+let hovered = null;
+
+function getGalaxyIntersects(e) {
+  mouse.x = (e.clientX / window.innerWidth)*2-1;
+  mouse.y = -(e.clientY / window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  return raycaster.intersectObjects(districtClickables, false);
+}
+
+window.addEventListener('pointermove', (e) => {
+  if (currentDistrict !== null || !galaxyGroup.visible) return;
+  const hits = getGalaxyIntersects(e);
+  if (hits.length > 0) {
+    const obj = hits[0].object;
+    if (hovered !== obj) {
+      if (hovered) {
+        if (hovered.userData.type==='district') hovered.material.emissiveIntensity = hovered.userData.district.core?4:2.5;
+        else if (hovered.userData.type==='zone') { hovered.material.emissiveIntensity=1.3; if(hovered.userData.glowSprite)hovered.userData.glowSprite.material.opacity=0.4; }
+      }
+      hovered = obj;
+      document.body.classList.add('pointer');
+      if (obj.userData.type==='district') {
+        obj.material.emissiveIntensity = 7;
+        obj.scale.setScalar(1.15);
+      } else if (obj.userData.type==='zone') {
+        obj.material.emissiveIntensity = 4;
+        obj.scale.setScalar(1.5);
+        if(obj.userData.glowSprite) obj.userData.glowSprite.material.opacity=0.9;
+      }
+    }
+  } else {
+    if (hovered) {
+      if (hovered.userData.type==='district') hovered.material.emissiveIntensity = hovered.userData.district.core?4:2.5;
+      else if (hovered.userData.type==='zone') { hovered.material.emissiveIntensity=1.3; if(hovered.userData.glowSprite)hovered.userData.glowSprite.material.opacity=0.4; }
+      hovered = null;
+      document.body.classList.remove('pointer');
+    }
+  }
+}, {passive:true});
+
+window.addEventListener('click', (e) => {
+  if (currentDistrict !== null || !galaxyGroup.visible) return;
+  const hits = getGalaxyIntersects(e);
+  if (hits.length > 0) {
+    const obj = hits[0].object;
+    if (obj.userData.type==='district') {
+      navigateTo(obj.userData.district.id);
+    } else if (obj.userData.type==='zone') {
+      navigateTo(obj.userData.districtId);
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════
+// ACADEMY INTERACTION — click a pillar, read its principle
+// ═══════════════════════════════════════════════
+const pillarOverlay = document.getElementById('pillarOverlay');
+
+function showPillar(p) {
+  document.getElementById('pillarNum').textContent = p.kicker !== undefined ? p.kicker : `Principle ${p.n}`;
+  document.getElementById('pillarName').textContent = p.name;
+  document.getElementById('pillarText').textContent = p.text;
+  pillarOverlay.classList.add('visible');
+}
+
+document.getElementById('pillarClose').addEventListener('click', (e) => {
+  e.stopPropagation();
+  pillarOverlay.classList.remove('visible');
+});
+pillarOverlay.addEventListener('click', (e) => {
+  if (e.target === pillarOverlay) {
+    e.stopPropagation();
+    pillarOverlay.classList.remove('visible');
+  }
+});
+
+// ── Ask the Brain (Academy question interface) ──
+const askBar = document.getElementById('askBar');
+const askInput = document.getElementById('askInput');
+const askBtn = document.getElementById('askBtn');
+
+function updateAskBarVisibility() {
+  // Shown only in the Academy, and never while a panel/overlay or the oath is up.
+  const inAcademy = (currentDistrict === 'academy');
+  askBar.classList.toggle('visible', inAcademy && !PRESENTATION.active);
+}
+
+async function submitQuestion() {
+  const q = askInput.value.trim();
+  if (!q) return;
+  askBtn.disabled = true;
+  askBtn.textContent = 'Considering…';
+  try {
+    const token = await getSessionToken();
+    if (!token) throw new Error('no-token');
+    const res = await fetch(`${CONFIG.BACKEND_URL}/question`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+    if (!res.ok) throw new Error('bad-status');
+    const data = await res.json();
+    // Show the answer in the same overlay style as a pillar.
+    showPillar({
+      kicker: data.principle_name ? `Principle ${data.principle_number} · ${data.principle_name}` : 'The Brain',
+      name: 'The Brain Responds',
+      text: data.answer || 'The Brain is silent on this. Ask again.',
+    });
+    askInput.value = '';
+    // Speak the answer if voice is enabled — same graceful path as chart analysis.
+    if (data.answer) speakText(data.answer);
+  } catch (_) {
+    // Any failure → a calm, in-voice message; never a raw error.
+    showPillar({
+      kicker: 'The Brain',
+      name: 'The Brain Is in Reflection',
+      text: 'The Brain could not answer just now. Ask again in a moment.',
+    });
+  } finally {
+    askBtn.disabled = false;
+    askBtn.textContent = 'Ask';
+  }
+}
+
+askBtn.addEventListener('click', (e) => { e.stopPropagation(); submitQuestion(); });
+askInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.stopPropagation(); submitQuestion(); }
+});
+// Keep clicks/keys in the bar from bubbling to the 3D canvas.
+askBar.addEventListener('click', (e) => e.stopPropagation());
+askBar.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+window.addEventListener('pointermove', (e) => {
+  if (currentDistrict !== 'academy') return;
+  mouse.x = (e.clientX / window.innerWidth)*2-1;
+  mouse.y = -(e.clientY / window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(pillarMeshes, false);
+  document.body.classList.toggle('pointer', hits.length > 0);
+}, {passive:true});
+
+window.addEventListener('click', (e) => {
+  if (currentDistrict !== 'academy' || pillarOverlay.classList.contains('visible')) return;
+  mouse.x = (e.clientX / window.innerWidth)*2-1;
+  mouse.y = -(e.clientY / window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(pillarMeshes, false);
+  if (hits.length > 0) showPillar(hits[0].object.userData.principle);
+});
+
+// ═══════════════════════════════════════════════
+// FORGE INTERACTION — click a door, read its threshold
+// ═══════════════════════════════════════════════
+window.addEventListener('pointermove', (e) => {
+  if (currentDistrict !== 'forge') return;
+  mouse.x = (e.clientX / window.innerWidth)*2-1;
+  mouse.y = -(e.clientY / window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(forgeDoorPlanes, false);
+  document.body.classList.toggle('pointer', hits.length > 0);
+}, {passive:true});
+
+window.addEventListener('click', (e) => {
+  if (currentDistrict !== 'forge' || pillarOverlay.classList.contains('visible')) return;
+  mouse.x = (e.clientX / window.innerWidth)*2-1;
+  mouse.y = -(e.clientY / window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(forgeDoorPlanes, false);
+  if (hits.length > 0) {
+    const d = hits[0].object.userData.door;
+    showPillar({ kicker: `Rank ${d.n}`, name: d.name, text: `${d.quote} — Requirement: ${d.requirement}` });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// LOUNGE INTERACTION — click a name, read their insight
+// ═══════════════════════════════════════════════
+window.addEventListener('pointermove', (e) => {
+  if (currentDistrict !== 'lounge') return;
+  mouse.x = (e.clientX / window.innerWidth)*2-1;
+  mouse.y = -(e.clientY / window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(memberSprites, false);
+  document.body.classList.toggle('pointer', hits.length > 0);
+}, {passive:true});
+
+window.addEventListener('click', (e) => {
+  if (currentDistrict !== 'lounge' || pillarOverlay.classList.contains('visible')) return;
+  mouse.x = (e.clientX / window.innerWidth)*2-1;
+  mouse.y = -(e.clientY / window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(memberSprites, false);
+  if (hits.length > 0) {
+    const m = hits[0].object.userData.member;
+    showPillar({
+      kicker: m.rank.toUpperCase(),
+      name: m.name,
+      text: `${m.charts_offered} charts offered — ${m.insight}`,
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// THE THRESHOLD — the oath sequence (no clicks, time-driven)
+// ═══════════════════════════════════════════════
+let thresholdSequenceId = 0;
+
+function cancelOathSequence() {
+  thresholdSequenceId++;
+  const oathEl = document.getElementById('thresholdOath');
+  oathEl.style.display = 'none';
+  document.getElementById('oathLine').classList.remove('shown');
+}
+
+function startOathSequence() {
+  const seq = ++thresholdSequenceId;
+  const oathEl = document.getElementById('thresholdOath');
+  const lineEl = document.getElementById('oathLine');
+  oathEl.style.display = 'flex';
+
+  const showLine = (i) => {
+    if (seq !== thresholdSequenceId) return;
+    if (i >= OATH_LINES.length) {
+      lineEl.classList.remove('shown');
+      setTimeout(() => { if (seq === thresholdSequenceId) dissolveOath(seq); }, 1300);
+      return;
+    }
+    lineEl.textContent = OATH_LINES[i];
+    requestAnimationFrame(() => { if (seq === thresholdSequenceId) lineEl.classList.add('shown'); });
+    setTimeout(() => {
+      if (seq !== thresholdSequenceId) return;
+      lineEl.classList.remove('shown');
+      setTimeout(() => showLine(i + 1), 1300);
+    }, 2400);
+  };
+  showLine(0);
+}
+
+function dissolveOath(seq) {
+  document.getElementById('thresholdOath').style.display = 'none';
+  burstThresholdParticles();
+  setTimeout(() => {
+    if (seq === thresholdSequenceId && currentDistrict === 'threshold') {
+      navigateTo('galaxy', PRESENTATION.active);
+      if (PRESENTATION.active && PRESENTATION.onThresholdComplete) {
+        const cb = PRESENTATION.onThresholdComplete;
+        PRESENTATION.onThresholdComplete = null;
+        cb();
+      }
+    }
+  }, 3200);
+}
+
+// ═══════════════════════════════════════════════
+// PRESENTATION MODE — auto-play cinematic sequence ("P" or hidden trigger)
+// ═══════════════════════════════════════════════
+const presentationIndicator = document.getElementById('presentationIndicator');
+
+function presentationDelay(ms, fn) {
+  const id = setTimeout(() => {
+    if (!PRESENTATION.active) return; // cancelled mid-flight
+    fn();
+  }, ms);
+  PRESENTATION.timers.push(id);
+  return id;
+}
+
+function clearPresentationTimers() {
+  PRESENTATION.timers.forEach(id => clearTimeout(id));
+  PRESENTATION.timers = [];
+}
+
+function startPresentation() {
+  if (PRESENTATION.active) return;
+  PRESENTATION.active = true;
+  controls.enabled = false;
+  controls.autoRotate = true; // Galaxy's own idle rotation, restored on every district that uses it
+  hideTribePanel();
+  closeJitsiPanel();
+  pillarOverlay.classList.remove('visible');
+  districtNav.classList.add('hidden');
+  jitsiTrigger.style.display = 'none';
+  presentationIndicator.classList.add('visible');
+  window.addEventListener('click', stopPresentation, { once: true });
+
+  navigateTo('galaxy', true);
+  presentationDelay(CONFIG.PRESENTATION_TIMINGS.initialDelayMs, () => {
+    PRESENTATION.onThresholdComplete = () => {
+      presentationDelay(CONFIG.PRESENTATION_TIMINGS.postOathPauseMs, presentationGoToFloor);
+    };
+    navigateTo('threshold', true);
+  });
+}
+
+function stopPresentation() {
+  if (!PRESENTATION.active) return;
+  PRESENTATION.active = false;
+  window.removeEventListener('click', stopPresentation);
+  PRESENTATION.onThresholdComplete = null;
+  presentationTween = null;
+  clearPresentationTimers();
+  controls.enabled = true;
+  presentationIndicator.classList.remove('visible');
+  if (CONFIG.JITSI_ROOM_URL) jitsiTrigger.style.display = '';
+  districtNav.classList.remove('hidden');
+  updateNavVisibility();
+  navigateTo('galaxy', true);
+}
+
+function presentationGoToFloor() {
+  navigateTo('floor', true);
+  presentationDelay(CONFIG.PRESENTATION_TIMINGS.floorPauseMs, presentationGoToAcademy);
+}
+function presentationGoToAcademy() {
+  navigateTo('academy', true);
+  presentationDelay(CONFIG.PRESENTATION_TIMINGS.academyOrbitMs, presentationGoToForge);
+}
+function presentationGoToForge() {
+  navigateTo('forge', true);
+  presentationRunForgeDoorPan(0);
+}
+function presentationRunForgeDoorPan(doorIndex) {
+  if (!PRESENTATION.active) return;
+  if (doorIndex >= FORGE_Z.length) {
+    presentationGoToLounge();
+    return;
+  }
+  // Moves the camera itself down the corridor toward each door in turn —
+  // not just swiveling the look-target — so this reads as travel, not a
+  // static pivot. Same tween mechanism as every other presentation move.
+  const z = interiors.forge.position.z + FORGE_Z[doorIndex];
+  presentationTweenCamera(
+    new THREE.Vector3(0, -1.0, z + 5),
+    new THREE.Vector3(0, -1.0, z),
+    CONFIG.PRESENTATION_TIMINGS.cameraTweenMs
+  );
+  presentationDelay(CONFIG.PRESENTATION_TIMINGS.forgeDoorPauseMs, () => presentationRunForgeDoorPan(doorIndex + 1));
+}
+function presentationGoToLounge() {
+  navigateTo('lounge', true);
+  presentationDelay(CONFIG.PRESENTATION_TIMINGS.loungeOrbitMs, presentationGoToObservatory);
+}
+function presentationGoToObservatory() {
+  navigateTo('observatory', true);
+  presentationDelay(CONFIG.PRESENTATION_TIMINGS.observatoryOrbitMs, presentationGoToCouncil);
+}
+function presentationGoToCouncil() {
+  navigateTo('council', true);
+  presentationDelay(CONFIG.PRESENTATION_TIMINGS.councilOrbitMs, stopPresentation);
+}
+
+document.getElementById('presentationTrigger').addEventListener('click', (e) => {
+  e.stopPropagation();
+  startPresentation();
+});
+
+// ═══════════════════════════════════════════════
+// CHART UPLOAD & RITUAL (Floor only) — wired to the real Brain
+// ═══════════════════════════════════════════════
+// BACKEND_URL now lives in CONFIG at the top of this file.
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) processChart(file);
+});
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (file) processChart(file);
+});
+
+// Returns the real Clerk session token, waiting for Clerk to finish loading
+// first. Opens the sign-in modal (and throws a gentle, in-voice message) if
+// the member isn't signed in yet.
+async function getSessionToken() {
+  await clerkReady;
+  if (!window.Clerk) {
+    throw new Error('The Brain is in reflection. Offer your chart again in a moment.');
+  }
+  if (!window.Clerk.session) {
+    window.Clerk.openSignIn();
+    throw new Error('Sign in to offer your chart to the Brain.');
+  }
+  try {
+    return await window.Clerk.session.getToken();
+  } catch (_) {
+    // Token refresh can fail (expired session, network blip mid-refresh).
+    // Never surface Clerk's raw error — prompt a clean re-entry instead.
+    throw new Error('Your session has rested. Sign in again to continue.');
+  }
+}
+
+async function analyzeChart(file) {
+  const token = await getSessionToken();
+  const formData = new FormData();
+  formData.append('chart', file);
+
+  let res;
+  try {
+    res = await fetch(`${CONFIG.BACKEND_URL}/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+  } catch (_) {
+    // Network-level failure (offline, unreachable, CORS) — fetch() throws
+    // its own raw browser text here ("Failed to fetch" etc.) if this isn't
+    // caught explicitly. Never show that directly.
+    throw new Error('The Brain is in reflection. Offer your chart again in a moment.');
+  }
+
+  let payload = null;
+  try { payload = await res.json(); } catch (_) { /* no JSON body */ }
+
+  if (!res.ok) {
+    const detail = (payload && payload.detail) || 'The Brain is in reflection. Offer your chart again in a moment.';
+    throw new Error(detail);
+  }
+  return payload;
+}
+
+function formatDoctrineLink(link) {
+  if (!link || !link.principle_name) return '';
+  return `Principle ${link.principle_number} — ${link.principle_name}. ${link.connection || ''}`;
+}
+
+function resetPanelVisibility() {
+  ['pLesson', 'pDoctrine', 'pMemory', 'pAssessment'].forEach(id => {
+    document.getElementById(id).style.display = '';
+  });
+  document.getElementById('observatoryBtn').style.display = '';
+}
+
+// Confidence badge — only ever shows when a backend response actually
+// includes a numeric `confidence` field. The current backend doesn't send
+// one yet, so this stays hidden until that lands; nothing here needs to
+// change when it does.
+function confidenceTier(confidence) {
+  if (confidence >= 0.85) return { cls: 'tier-high', label: 'Certain' };
+  if (confidence >= 0.60) return { cls: 'tier-mid', label: 'Mostly clear' };
+  if (confidence >= 0.40) return { cls: 'tier-low', label: 'Partial' };
+  return { cls: 'tier-unclear', label: 'Unclear' };
+}
+
+function updateConfidenceBadge(confidence) {
+  const badge = document.getElementById('confidenceBadge');
+  if (typeof confidence !== 'number' || isNaN(confidence)) {
+    badge.style.display = 'none';
+    return;
+  }
+  const pct = Math.round(Math.max(0, Math.min(1, confidence)) * 100);
+  const tier = confidenceTier(confidence);
+  badge.textContent = `${pct}% · ${tier.label}`;
+  badge.className = `confidence-badge ${tier.cls}`;
+  badge.style.display = '';
+}
+
+function hideConfidenceBadge() {
+  document.getElementById('confidenceBadge').style.display = 'none';
+}
+
+function processChart(file) {
+  if (isProcessing || currentDistrict !== 'floor') return;
+
+  if (!file.type.startsWith('image/')) {
+    failRitual('The Brain requires a chart image — PNG, JPEG, or WEBP.');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    failRitual('That image is too large. Offer a smaller file.');
+    return;
+  }
+
+  isProcessing = true;
+  hideConfidenceBadge();
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      showChartIn3D(img);
+      startRitual();
+      const minimumDisplay = new Promise(resolve => setTimeout(resolve, 1800));
+      Promise.all([analyzeChart(file), minimumDisplay])
+        .then(([result]) => completeRitual(result))
+        .catch(err => failRitual(err.message || 'The Brain is in reflection. Offer your chart again in a moment.'));
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function disposeChartPlane() {
+  if (!chartPlane) return;
+  interiors.floor.remove(chartPlane);
+  if (chartPlane.geometry) chartPlane.geometry.dispose();
+  if (chartPlane.material) chartPlane.material.dispose();
+  if (chartTexture) chartTexture.dispose();
+  chartPlane = null;
+  chartTexture = null;
+}
+
+function showChartIn3D(img) {
+  disposeChartPlane();
+  chartTexture = new THREE.CanvasTexture(img);
+  chartTexture.colorSpace = THREE.SRGBColorSpace;
+  const aspect = img.width/img.height;
+  const h = 2.5, w = Math.min(h*aspect, 3.5);
+  chartPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, Math.min(h, 3.5/aspect)),
+    new THREE.MeshBasicMaterial({ map:chartTexture, transparent:true, opacity:0.75, side:THREE.DoubleSide })
+  );
+  chartPlane.position.set(0, 1, -0.15);
+  interiors.floor.add(chartPlane);
+  scanGroup.visible = true;
+}
+
+function startRitual() {
+  uploadZone.style.pointerEvents = 'none';
+  uploadZone.style.opacity = '0.4';
+  processingText.classList.add('visible');
+  const phases = ['The Brain is studying your chart...','Identifying structure...','Cross-referencing memory...','Doctrine alignment forming...','Understanding crystallizing...'];
+  let idx = 0;
+  phaseText.textContent = phases[0];
+  uploadZone._interval = setInterval(() => {
+    idx = (idx + 1) % phases.length;
+    phaseText.textContent = phases[idx];
+  }, 1100);
+}
+
+// ═══════════════════════════════════════════════
+// THE BRAIN'S VOICE — spoken chart analysis (ElevenLabs via backend /speak)
+// ═══════════════════════════════════════════════
+// The five panels are composed into one measured, flowing statement and
+// spoken as the cascade reveals them. Everything here fails silently: if the
+// voice is disabled, unconfigured, out of quota, or unreachable, the ritual
+// proceeds exactly as it does without sound. Voice is an enhancement layer,
+// never a dependency.
+let _voiceAudio = null;          // the current HTMLAudioElement, so we can stop it
+let _voiceHasGesture = false;    // set true on the first user interaction (autoplay policy)
+
+window.addEventListener('pointerdown', () => { _voiceHasGesture = true; }, { once: true });
+window.addEventListener('keydown', () => { _voiceHasGesture = true; }, { once: true });
+
+// Compose the panels into reverent, spoken-word prose. Kept compact to
+// respect the character quota, and phrased as a master speaking, not a form
+// being read aloud (no "The Structure:" labels — those are visual).
+function composeSpokenAnalysis(result) {
+  const parts = [];
+  if (result.structure) parts.push(result.structure);
+  if (result.lesson) parts.push(result.lesson);
+  if (result.doctrine_link && result.doctrine_link.connection) parts.push(result.doctrine_link.connection);
+  if (result.memory) parts.push(result.memory);
+  if (result.assessment) parts.push(result.assessment);
+  // Join with sentence spacing so the voice pauses naturally between panels.
+  return parts.join('  ');
+}
+
+function stopVoice() {
+  if (_voiceAudio) {
+    try { _voiceAudio.pause(); } catch (_) {}
+    try { URL.revokeObjectURL(_voiceAudio.src); } catch (_) {}
+    _voiceAudio = null;
+  }
+}
+
+// Core voice: speak any text via the backend /speak proxy. Shared by chart
+// analysis and question responses. Fails completely silently.
+async function speakText(text) {
+  if (!CONFIG.VOICE_ENABLED) return;
+  if (!_voiceHasGesture) return;           // autoplay would be blocked anyway
+  if (!text) return;
+
+  stopVoice();                             // never overlap two readings
+
+  try {
+    const token = await getSessionToken();
+    if (!token) return;
+    const res = await fetch(`${CONFIG.BACKEND_URL}/speak`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return;                   // 503 quota, 502 upstream, etc. — stay silent
+    const blob = await res.blob();
+    if (!blob || blob.size === 0) return;
+    const audio = new Audio(URL.createObjectURL(blob));
+    audio.volume = 0.9;
+    _voiceAudio = audio;
+    // Duck the ambient bed a touch while the Brain speaks, then restore.
+    if (typeof duckMasterAudio === 'function') duckMasterAudio();
+    audio.addEventListener('ended', () => { if (typeof restoreMasterAudio === 'function') restoreMasterAudio(); });
+    audio.play().catch(() => { /* autoplay blocked or interrupted — silent */ });
+  } catch (_) {
+    // Any failure at all → proceeds silently.
+  }
+}
+
+async function speakAnalysis(result) {
+  const text = composeSpokenAnalysis(result);
+  if (text) speakText(text);
+}
+
+function completeRitual(result) {
+  clearInterval(uploadZone._interval);
+  processingText.classList.remove('visible');
+  scanGroup.visible = false;
+
+  resetPanelVisibility();
+  updateConfidenceBadge(result.confidence);
+  document.getElementById('pStructure').querySelector('.pcontent').textContent = result.structure || '';
+  document.getElementById('pLesson').querySelector('.pcontent').textContent = result.lesson || '';
+  document.getElementById('pDoctrine').querySelector('.pcontent').textContent = formatDoctrineLink(result.doctrine_link);
+  document.getElementById('pMemory').querySelector('.pcontent').textContent = result.memory || '';
+  document.getElementById('pAssessment').querySelector('.pcontent').textContent = result.assessment || '';
+
+  responseContainer.classList.add('visible');
+  updateNavVisibility();
+  document.querySelectorAll('.response-panel').forEach((p,i) => setTimeout(()=>p.classList.add('revealed'), 200+i*200));
+  setTimeout(()=>responseActions.classList.add('revealed'), 200+5*200+200);
+
+  // The Brain speaks as its words appear. Fails silently if voice is off,
+  // unconfigured, or unreachable — the cascade above is unaffected either way.
+  speakAnalysis(result);
+
+  uploadZone.style.pointerEvents = '';
+  uploadZone.style.opacity = '';
+  isProcessing = false;
+}
+
+function failRitual(message) {
+  clearInterval(uploadZone._interval);
+  processingText.classList.remove('visible');
+  scanGroup.visible = false;
+  hideConfidenceBadge();
+
+  document.getElementById('pStructure').querySelector('.pcontent').textContent = message;
+  ['pLesson', 'pDoctrine', 'pMemory', 'pAssessment'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('observatoryBtn').style.display = 'none';
+
+  responseContainer.classList.add('visible');
+  updateNavVisibility();
+  document.getElementById('pStructure').classList.add('revealed');
+  setTimeout(() => responseActions.classList.add('revealed'), 300);
+
+  uploadZone.style.pointerEvents = '';
+  uploadZone.style.opacity = '';
+  isProcessing = false;
+}
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  stopVoice();
+  responseContainer.classList.remove('visible');
+  updateNavVisibility();
+  document.querySelectorAll('.response-panel').forEach(p=>p.classList.remove('revealed'));
+  responseActions.classList.remove('revealed');
+  resetPanelVisibility();
+  uploadZone.style.pointerEvents = '';
+  uploadZone.style.opacity = '';
+  scanGroup.visible = false;
+  disposeChartPlane();
+});
+
+document.getElementById('observatoryBtn').addEventListener('click', () => navigateTo('observatory'));
+
+// ═══════════════════════════════════════════════
+// ACTIVITY MANAGER — ambient "the institution is inhabited" simulation
+// ═══════════════════════════════════════════════
+// One shared controller instead of a dozen independent systems: a single
+// per-frame tick, a shared figure/particle vocabulary, a global draw-call
+// conscience, and one place that knows about the presentation gate and the
+// mobile budget. Every district registers its ambient pieces here; the
+// manager decides what actually runs based on which district is visible.
+const ACT = CONFIG.ACTIVITY;
+const ACT_MOBILE_SCALE = IS_MOBILE ? 0.6 : 1.0; // spec: −40% below 768px
+
+// Scale a "desired count" by both the global density knob and the mobile
+// budget, always returning at least 1 when the feature is on at all.
+function actCount(n) {
+  return Math.max(1, Math.round(n * ACT.figureDensity * ACT_MOBILE_SCALE));
+}
+
+// Is ambient activity allowed to *emit/animate* right now? During the
+// auto-play presentation the per-district sync takes over (intensified),
+// so this returns true there too — callers that must stay silent during
+// presentation check PRESENTATION.active themselves.
+function activityEnabled() {
+  return ACT.enabled;
+}
+
+// A simple shadowy figure: a soft capsule with a faint glow sprite. Reused
+// by Lounge, Academy, Forge, Council. Returns a group so callers can move
+// it as a unit and animate sub-parts.
+function makeFigure(color = '#1a1206', glowColor = '#E8893A', height = 1.2) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.16, height, 4, 8),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0.1, transparent: true, opacity: 0.55 })
+  );
+  g.add(body);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: amberGlow, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.18, color: glowColor }));
+  glow.scale.setScalar(1.1);
+  glow.position.y = 0.1;
+  g.add(glow);
+  g.userData = { body, glow, phase: Math.random() * Math.PI * 2 };
+  return g;
+}
+
+// Small orbiting "conversation" particle cloud, used between figures in a
+// circle. Returns a Points object plus its per-point metadata.
+function makeConversationParticles(center, radius, count, color = '#F5A623') {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const meta = [];
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = radius * (0.3 + Math.random() * 0.7);
+    meta.push({ baseA: a, r, h: 0.2 + Math.random() * 0.9, speed: 0.3 + Math.random() * 0.6, phase: Math.random() * Math.PI * 2 });
+    pos[i * 3] = center.x + Math.cos(a) * r;
+    pos[i * 3 + 1] = center.y + meta[i].h;
+    pos[i * 3 + 2] = center.z + Math.sin(a) * r;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mesh = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: 0.03, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
+  mesh.userData = { meta, center };
+  return mesh;
+}
+
+// Global heat-beat: every few minutes a random district surges in intensity
+// for ~30s. Stored as a 0..1 value per district id that other systems read.
+const activityHeat = {
+  floor: 0, academy: 0, forge: 0, lounge: 0, observatory: 0, council: 0, threshold: 0,
+};
+const _heatDistricts = Object.keys(activityHeat);
+let _heatTarget = null;
+let _heatStart = 0;
+let _nextHeatAt = 0;
+
+function updateHeatBeat(now, t) {
+  if (!ACT.enabled || !ACT.heatbeat || PRESENTATION.active) return;
+  if (now > _nextHeatAt) {
+    _heatTarget = _heatDistricts[Math.floor(Math.random() * _heatDistricts.length)];
+    _heatStart = now;
+    // next beat in 2–3 minutes
+    _nextHeatAt = now + 120000 + Math.random() * 60000;
+  }
+  // Decay all, raise the active one toward 1 over its 30s window.
+  for (const id of _heatDistricts) {
+    let target = 0;
+    if (id === _heatTarget) {
+      const elapsed = now - _heatStart;
+      target = elapsed < 30000 ? Math.sin((elapsed / 30000) * Math.PI) : 0; // ease up then down
+    }
+    activityHeat[id] += (target - activityHeat[id]) * Math.min(1, 0.02);
+  }
+}
+
+// During presentation, the *current* district is intensified to 1 regardless
+// of the heat-beat (which is itself paused during presentation).
+function effectiveIntensity(districtId) {
+  if (PRESENTATION.active && currentDistrict === districtId) return 1.0;
+  return 0.35 + activityHeat[districtId] * 0.65; // base hum + heat surge
+}
+
+// ── Global stats ticker ──
+const _tickerState = {
+  members: { el: null, val: 1247, nextAt: 0 },
+  charts: { el: null, val: 83, nextAt: 0 },
+  connections: { el: null, val: 412, nextAt: 0 },
+  sovereigns: { el: null, val: 3, nextAt: 0 },
+};
+function _initTicker() {
+  _tickerState.members.el = document.getElementById('tickMembers');
+  _tickerState.charts.el = document.getElementById('tickCharts');
+  _tickerState.connections.el = document.getElementById('tickConnections');
+  _tickerState.sovereigns.el = document.getElementById('tickSovereigns');
+}
+function _bump(stateKey, now, minGap, maxGap, maxStep, fmt) {
+  const s = _tickerState[stateKey];
+  if (!s.el) return;
+  if (now < s.nextAt) return;
+  s.nextAt = now + minGap + Math.random() * (maxGap - minGap);
+  // Sovereigns drift gently up and down by 1; the rest only ever climb.
+  if (stateKey === 'sovereigns') {
+    s.val = Math.max(1, Math.min(7, s.val + (Math.random() < 0.5 ? -1 : 1)));
+  } else {
+    s.val += 1 + Math.floor(Math.random() * maxStep);
+  }
+  s.el.textContent = fmt ? s.val.toLocaleString() : String(s.val);
+  s.el.classList.remove('bumped');
+  void s.el.offsetWidth; // restart the CSS animation
+  s.el.classList.add('bumped');
+}
+function updateTicker(now) {
+  if (!ACT.ticker) return;
+  _bump('members', now, 4000, 9000, 3, true);
+  _bump('charts', now, 12000, 28000, 1, false);
+  _bump('connections', now, 7000, 16000, 2, true);
+  _bump('sovereigns', now, 30000, 60000, 1, false);
+}
+// Central visibility: galaxy overview only, and never over the Oath or a
+// response panel. Called from navigateTo and the panel show/hide paths.
+function updateActivityTickerVisibility() {
+  const el = document.getElementById('activityTicker');
+  if (!el) return;
+  const onGalaxy = (currentDistrict === null);
+  const panelOpen = responseContainer.classList.contains('visible');
+  el.style.display = (ACT.enabled && ACT.ticker && onGalaxy && !panelOpen && !PRESENTATION.active) ? '' : 'none';
+}
+
+// The manager's single per-frame entry point, called from animate().
+function updateActivity(now, t, dt) {
+  if (!ACT.enabled) return;
+  sampleFrameRate(now);
+  updateHeatBeat(now, t);
+  updateTicker(now);
+  updateMurmur();
+  for (const fn of _activityUpdaters) fn(now, t, dt);
+}
+const _activityUpdaters = [];
+
+// ── FPS auto-degradation ──────────────────────────────────────────────────
+// "Feels alive" dies the instant the frame rate stutters on a presenter's
+// mid-range phone, so the activity system watches its own frame budget and
+// sheds load automatically. It acts on geometry that already exists (the
+// builders ran once at startup) by thinning particle draws and hiding
+// secondary figure groups — it never rebuilds. Hysteresis (different up/down
+// thresholds + a cooldown) prevents oscillation between tiers.
+const PERF = {
+  tier: 0,                 // 0 = full, 1 = thinned, 2 = minimal
+  maxTier: 2,
+  frames: 0,
+  windowStart: 0,
+  fps: 60,
+  lastChange: 0,
+  // Escalate (drop quality) below this; recover (restore) only above the
+  // higher number — the gap is the hysteresis band.
+  degradeBelow: IS_MOBILE ? 32 : 40,
+  recoverAbove: IS_MOBILE ? 45 : 55,
+  cooldownMs: 4000,        // minimum time between tier changes
+  sampleMs: 1000,          // FPS averaged over 1s windows
+};
+
+function sampleFrameRate(now) {
+  if (PERF.windowStart === 0) { PERF.windowStart = now; return; }
+  PERF.frames++;
+  const elapsed = now - PERF.windowStart;
+  if (elapsed < PERF.sampleMs) return;
+  PERF.fps = (PERF.frames * 1000) / elapsed;
+  PERF.frames = 0;
+  PERF.windowStart = now;
+
+  if (now - PERF.lastChange < PERF.cooldownMs) return; // respect cooldown
+
+  if (PERF.fps < PERF.degradeBelow && PERF.tier < PERF.maxTier) {
+    PERF.tier++;
+    PERF.lastChange = now;
+    applyPerfTier();
+    console.log(`[perf] frame rate ${PERF.fps.toFixed(0)}fps — reducing ambient activity to tier ${PERF.tier}`);
+  } else if (PERF.fps > PERF.recoverAbove && PERF.tier > 0) {
+    PERF.tier--;
+    PERF.lastChange = now;
+    applyPerfTier();
+    console.log(`[perf] frame rate ${PERF.fps.toFixed(0)}fps — restoring ambient activity to tier ${PERF.tier}`);
+  }
+}
+
+// Apply the current tier to already-built activity. Idempotent: safe to call
+// repeatedly with the same tier.
+function applyPerfTier() {
+  const tier = PERF.tier;
+
+  // Particle systems that are "nice to have": conversation sparks, academy
+  // codex stream, threshold arrival streams. Thinned at tier 1, hidden at 2.
+  const thinParticle = (mesh, baseOpacity) => {
+    if (!mesh) return;
+    if (tier === 0) { mesh.visible = true; mesh.material.opacity = baseOpacity; }
+    else if (tier === 1) { mesh.visible = true; mesh.material.opacity = baseOpacity * 0.6; }
+    else { mesh.visible = false; }
+  };
+
+  // Lounge: conversation particle clouds + extra figure circles.
+  if (_act.lounge) {
+    _act.lounge.circles.forEach((ci, idx) => {
+      thinParticle(ci.conv, 0.5);
+      // At tier 2, keep only the first ~40% of circles' figures visible.
+      const keepFig = tier < 2 || idx < Math.ceil(_act.lounge.circles.length * 0.4);
+      ci.figs.forEach(f => { f.visible = keepFig; });
+    });
+  }
+  // Academy: codex→pillar stream + patrol/extra figures.
+  if (_act.academy) {
+    thinParticle(_act.academy.stream, 0.5);
+    _act.academy.figs.forEach((f, idx) => {
+      f.visible = tier < 2 || idx < Math.ceil(_act.academy.figs.length * 0.5);
+    });
+  }
+  // Threshold: arrival streams (hero light + words always stay).
+  if (_act.threshold) {
+    _act.threshold.streams.forEach((s, idx) => {
+      if (tier === 0) s.mesh.visible = true;
+      else if (tier === 1) s.mesh.visible = idx % 2 === 0;   // half
+      else s.mesh.visible = idx % 3 === 0;                   // a third
+    });
+  }
+  // Council + Forge: secondary figures only (rings/doors are the hero).
+  if (_act.council) {
+    _act.council.figs.forEach((f, idx) => {
+      f.visible = tier < 2 || idx < Math.ceil(_act.council.figs.length * 0.5);
+    });
+  }
+  if (_act.forge) {
+    _act.forge.figs.forEach((f, idx) => {
+      f.visible = tier < 2 || idx < Math.ceil(_act.forge.figs.length * 0.5);
+    });
+  }
+}
+
+// ── Ambient audio murmur (filtered noise) for Lounge + Academy ──
+// Created lazily once the audio context exists; routed through master gain
+// so the existing duck/restore still governs it. Volume tracks camera
+// presence in those two districts only.
+let _murmurSource = null, _murmurFilter = null, _murmurGain = null;
+function ensureMurmur() {
+  if (!ACT.ambientAudio || _murmurSource || !audioCtx || !masterGain) return;
+  try {
+    const bufferSize = 2 * audioCtx.sampleRate;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+    _murmurSource = audioCtx.createBufferSource();
+    _murmurSource.buffer = buffer;
+    _murmurSource.loop = true;
+    _murmurFilter = audioCtx.createBiquadFilter();
+    _murmurFilter.type = 'bandpass';
+    _murmurFilter.frequency.value = 320;
+    _murmurFilter.Q.value = 0.7;
+    _murmurGain = audioCtx.createGain();
+    _murmurGain.gain.value = 0;
+    _murmurSource.connect(_murmurFilter);
+    _murmurFilter.connect(_murmurGain);
+    _murmurGain.connect(masterGain);
+    _murmurSource.start();
+  } catch (_) { /* audio optional — never break the visual */ }
+}
+function updateMurmur() {
+  if (!_murmurGain) return;
+  const inMurmurDistrict = (currentDistrict === 'lounge' || currentDistrict === 'academy');
+  const target = inMurmurDistrict ? 0.12 : 0;
+  rampGain(_murmurGain, target, 0.8);
+}
+
+// Small fading-word label (Threshold arrivals). Canvas-text sprite.
+function makeWordSprite(text) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.font = '40px Georgia, serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#F5D08A';
+  ctx.shadowColor = 'rgba(245,166,35,0.8)'; ctx.shadowBlur = 16;
+  ctx.fillText(text, 256, 64);
+  const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  spr.scale.set(3, 0.75, 1);
+  return spr;
+}
+
+// Registries populated by buildActivity(), consumed by the updaters.
+const _act = {
+  threshold: null, lounge: null, academy: null, floor: null,
+  forge: null, observatory: null, council: null,
+};
+
+function buildActivity() {
+  if (!ACT.enabled) return;
+  if (ACT.threshold) _buildThresholdActivity();
+  if (ACT.lounge) _buildLoungeActivity();
+  if (ACT.academy) _buildAcademyActivity();
+  if (ACT.floor) _buildFloorActivity();
+  if (ACT.forge) _buildForgeActivity();
+  if (ACT.observatory) _buildObservatoryActivity();
+  if (ACT.council) _buildCouncilActivity();
+}
+
+// ───────── THRESHOLD: arrival streams + bursts + words ─────────
+function _buildThresholdActivity() {
+  const group = new THREE.Group();
+  interiors.threshold.add(group);
+  const lightLocal = new THREE.Vector3(0, 0, -55);
+  const streamCount = actCount(13);
+  const streams = [];
+  for (let i = 0; i < streamCount; i++) {
+    const ptsCount = 12;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(ptsCount * 3);
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ color: '#F5A623', size: 0.06, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 });
+    const mesh = new THREE.Points(geo, mat);
+    group.add(mesh);
+    const edgeAngle = Math.random() * Math.PI * 2;
+    const edgeR = 14 + Math.random() * 10;
+    streams.push({
+      mesh, ptsCount,
+      origin: new THREE.Vector3(Math.cos(edgeAngle) * edgeR, (Math.random() - 0.5) * 14, lightLocal.z + (Math.random() - 0.5) * 16),
+      speed: 0.04 + Math.random() * 0.05, offset: Math.random(),
+    });
+  }
+  const words = ['Another enters', 'A new Initiate', 'The institution grows', 'One more sees'];
+  const wordSprites = words.map(w => { const s = makeWordSprite(w); s.position.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4, lightLocal.z + 12); group.add(s); return s; });
+  _act.threshold = { group, streams, lightLocal, wordSprites, nextBurst: 0, nextWord: 0, activeWord: null, wordStart: 0 };
+  _activityUpdaters.push(_updateThresholdActivity);
+}
+function _updateThresholdActivity(now, t, dt) {
+  const a = _act.threshold;
+  if (!a || !interiors.threshold.visible) return;
+  const intensity = effectiveIntensity('threshold');
+  a.streams.forEach(s => {
+    if (!s.mesh.visible) return; // hidden by perf tier — skip its work
+    const arr = s.mesh.geometry.attributes.position.array;
+    for (let i = 0; i < s.ptsCount; i++) {
+      let f = ((t * s.speed + s.offset) % 1) - (i / s.ptsCount) * 0.12;
+      f = ((f % 1) + 1) % 1;
+      const p = s.origin.clone().lerp(a.lightLocal, f);
+      arr[i * 3] = p.x; arr[i * 3 + 1] = p.y; arr[i * 3 + 2] = p.z;
+    }
+    s.mesh.geometry.attributes.position.needsUpdate = true;
+    s.mesh.material.opacity = 0.3 + 0.4 * intensity;
+  });
+  if (now > a.nextBurst) {
+    a.nextBurst = now + (8000 + Math.random() * 7000) / (0.5 + intensity);
+    thresholdLight.scale.setScalar(thresholdLight.scale.x * 1.6);
+  }
+  thresholdLight.scale.lerp(new THREE.Vector3(1, 1, 1).multiplyScalar(1 + intensity * 4), 0.05);
+  if (!a.activeWord && now > a.nextWord) {
+    a.activeWord = a.wordSprites[Math.floor(Math.random() * a.wordSprites.length)];
+    a.wordStart = now;
+    a.nextWord = now + 6000 + Math.random() * 6000;
+  }
+  if (a.activeWord) {
+    const e = (now - a.wordStart) / 3000;
+    a.activeWord.material.opacity = e < 1 ? Math.sin(e * Math.PI) * 0.8 : 0;
+    if (e >= 1) a.activeWord = null;
+  }
+}
+
+// ───────── LOUNGE: figure circles + spotlight ─────────
+function _buildLoungeActivity() {
+  const group = new THREE.Group();
+  interiors.lounge.add(group);
+  const circleCount = actCount(11);
+  const circles = [];
+  for (let c = 0; c < circleCount; c++) {
+    const ca = -ARC_HALF * 1.2 + Math.random() * ARC_HALF * 2.4;
+    const cr = 3 + Math.random() * 7;
+    const center = new THREE.Vector3(Math.sin(ca) * cr, -3.4, -Math.cos(ca) * cr);
+    const inCircle = 3 + Math.floor(Math.random() * 3);
+    const figs = [];
+    for (let f = 0; f < inCircle; f++) {
+      const fa = (f / inCircle) * Math.PI * 2;
+      const fig = makeFigure();
+      fig.position.set(center.x + Math.cos(fa) * 0.7, center.y, center.z + Math.sin(fa) * 0.7);
+      group.add(fig); figs.push(fig);
+    }
+    const conv = makeConversationParticles(center, 0.9, actCount(8));
+    group.add(conv);
+    circles.push({ center, figs, conv });
+  }
+  _act.lounge = { group, circles, spotlight: { nextAt: 0 } };
+  _activityUpdaters.push(_updateLoungeActivity);
+  _initLoungeSpotlightCard();
+}
+function _updateLoungeActivity(now, t, dt) {
+  const a = _act.lounge;
+  if (!a || !interiors.lounge.visible) return;
+  const intensity = effectiveIntensity('lounge');
+  const speedMul = PRESENTATION.active && currentDistrict === 'lounge' ? 2 : 1;
+  a.circles.forEach(ci => {
+    ci.figs.forEach(fig => {
+      if (!fig.visible) return; // hidden by perf tier — skip its work
+      fig.userData.glow.material.opacity = 0.12 + 0.12 * intensity + Math.sin(t * 0.8 + fig.userData.phase) * 0.04;
+      fig.position.y = ci.center.y + Math.sin(t * 0.5 + fig.userData.phase) * 0.04;
+    });
+    if (!ci.conv.visible) return; // particle cloud thinned out — skip geometry write
+    const arr = ci.conv.geometry.attributes.position.array;
+    const meta = ci.conv.userData.meta;
+    for (let i = 0; i < meta.length; i++) {
+      const m = meta[i];
+      const ang = m.baseA + t * m.speed * speedMul;
+      arr[i * 3] = ci.center.x + Math.cos(ang) * m.r;
+      arr[i * 3 + 1] = ci.center.y + m.h + Math.sin(t + m.phase) * 0.1;
+      arr[i * 3 + 2] = ci.center.z + Math.sin(ang) * m.r;
+    }
+    ci.conv.geometry.attributes.position.needsUpdate = true;
+  });
+  _updateLoungeSpotlight(now);
+}
+function _initLoungeSpotlightCard() {
+  if (document.getElementById('spotlightCard')) return;
+  const card = document.createElement('div');
+  card.id = 'spotlightCard';
+  card.className = 'spotlight-card';
+  card.innerHTML = '<div class="sc-name"></div><div class="sc-rank"></div><div class="sc-charts"></div><div class="sc-insight"></div>';
+  document.body.appendChild(card);
+}
+let _spotlightIndex = 0;
+function _updateLoungeSpotlight(now) {
+  const a = _act.lounge;
+  const card = document.getElementById('spotlightCard');
+  if (!card) return;
+  if (!interiors.lounge.visible) { card.classList.remove('visible'); return; }
+  if (now > a.spotlight.nextAt) {
+    a.spotlight.nextAt = now + 15000;
+    if (typeof MEMBERS !== 'undefined' && MEMBERS.length) {
+      const m = MEMBERS[_spotlightIndex % MEMBERS.length];
+      _spotlightIndex++;
+      card.querySelector('.sc-name').textContent = m.name;
+      card.querySelector('.sc-rank').textContent = m.rank;
+      card.querySelector('.sc-charts').textContent = `${m.charts_offered} charts offered`;
+      card.querySelector('.sc-insight').textContent = m.insight;
+      card.classList.remove('visible'); void card.offsetWidth; card.classList.add('visible');
+      setTimeout(() => card.classList.remove('visible'), 9000);
+    }
+  }
+}
+
+// ───────── ACADEMY: figures + codex↔pillar streams + flares ─────────
+function _buildAcademyActivity() {
+  const group = new THREE.Group();
+  interiors.academy.add(group);
+  const figCount = actCount(9);
+  const figs = [];
+  for (let i = 0; i < figCount; i++) {
+    const fig = makeFigure();
+    const ang = Math.random() * Math.PI * 2;
+    const r = i < 2 ? 0.8 : (typeof PILLAR_RADIUS !== 'undefined' ? PILLAR_RADIUS : 5) * (0.7 + Math.random() * 0.3);
+    fig.position.set(Math.cos(ang) * r, -2, Math.sin(ang) * r);
+    fig.userData.patrol = (i === figCount - 1);
+    fig.userData.patrolAngle = ang;
+    group.add(fig); figs.push(fig);
+  }
+  const streamPts = actCount(30);
+  const sGeo = new THREE.BufferGeometry();
+  const sPos = new Float32Array(streamPts * 3);
+  sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+  const stream = new THREE.Points(sGeo, new THREE.PointsMaterial({ color: '#FFD700', size: 0.03, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
+  group.add(stream);
+  const sMeta = [];
+  for (let i = 0; i < streamPts; i++) sMeta.push({ pillar: Math.floor(Math.random() * 8), offset: Math.random(), speed: 0.2 + Math.random() * 0.3 });
+  _act.academy = { group, figs, stream, sMeta, streamPts, reverse: false, nextFlare: 0, flarePillar: -1, flareStart: 0, nextReverse: 0 };
+  _activityUpdaters.push(_updateAcademyActivity);
+}
+function _updateAcademyActivity(now, t, dt) {
+  const a = _act.academy;
+  if (!a || !interiors.academy.visible) return;
+  const intensity = effectiveIntensity('academy');
+  const pr = (typeof PILLAR_RADIUS !== 'undefined' ? PILLAR_RADIUS : 5);
+  a.figs.forEach(fig => {
+    fig.userData.glow.material.opacity = 0.12 + 0.12 * intensity;
+    if (fig.userData.patrol) {
+      fig.userData.patrolAngle += dt * 0.15;
+      fig.position.set(Math.cos(fig.userData.patrolAngle) * (pr * 0.6), -2, Math.sin(fig.userData.patrolAngle) * (pr * 0.6));
+    }
+  });
+  if (now > a.nextReverse) { a.reverse = !a.reverse; a.nextReverse = now + 8000 + Math.random() * 8000; }
+  if (a.stream.visible) {
+    const arr = a.stream.geometry.attributes.position.array;
+    for (let i = 0; i < a.streamPts; i++) {
+      const m = a.sMeta[i];
+      const pa = (m.pillar / 8) * Math.PI * 2;
+      const pPos = new THREE.Vector3(Math.cos(pa) * pr, 0, Math.sin(pa) * pr);
+      let f = (t * m.speed + m.offset) % 1;
+      if (a.reverse) f = 1 - f;
+      const p = new THREE.Vector3(0, 0.4, 0).lerp(pPos, f);
+      arr[i * 3] = p.x; arr[i * 3 + 1] = p.y; arr[i * 3 + 2] = p.z;
+    }
+    a.stream.geometry.attributes.position.needsUpdate = true;
+  }
+  if (now > a.nextFlare) {
+    a.nextFlare = now + (20000 + Math.random() * 10000) / (0.5 + intensity);
+    a.flarePillar = Math.floor(Math.random() * Math.min(8, pillarMeshes.length));
+    a.flareStart = now;
+  }
+  if (a.flarePillar >= 0 && pillarMeshes[a.flarePillar]) {
+    const e = (now - a.flareStart) / 2500;
+    if (e < 1) {
+      const boost = Math.sin(e * Math.PI) * 1.5;
+      pillarMeshes[a.flarePillar].material.emissiveIntensity = pillarMeshes[a.flarePillar].userData.baseEmissive + boost;
+      if (typeof codex !== 'undefined') codex.material.emissiveIntensity = 2.6 + boost * 0.5;
+    } else { a.flarePillar = -1; }
+  }
+}
+
+// ───────── FLOOR: live-feed DOM + altar pulse + ghost flickers ─────────
+const _floorFeedTexts = [
+  'Compression pattern identified — P4 linked.',
+  'Liquidity sweep confirmed — 3rd occurrence this week.',
+  'Practitioner offered chart #47. Confidence: 0.89.',
+  'Structure read complete — P1 connection forged.',
+  'Adept submission logged — patience confirmed.',
+  'Cycle phase identified — P7 alignment noted.',
+  'Initiate offered first chart. The Brain remembers.',
+  'Annotation match: clean support level confirmed.',
+];
+function _buildFloorActivity() {
+  if (!document.getElementById('floorFeed')) {
+    const feed = document.createElement('div');
+    feed.id = 'floorFeed';
+    feed.className = 'floor-feed';
+    document.body.appendChild(feed);
+  }
+  _act.floor = { nextEntry: 0, nextGhost: 0, altarPulse: 0 };
+  _activityUpdaters.push(_updateFloorActivity);
+}
+function _updateFloorActivity(now, t, dt) {
+  const a = _act.floor;
+  if (!a) return;
+  const feed = document.getElementById('floorFeed');
+  if (!interiors.floor.visible) { if (feed) feed.style.display = 'none'; return; }
+  if (feed && feed.style.display === 'none') feed.style.display = '';
+  const intensity = effectiveIntensity('floor');
+  if (now > a.nextEntry && feed) {
+    a.nextEntry = now + (700 + Math.random() * 500) / (0.5 + intensity);
+    const line = document.createElement('div');
+    line.className = 'ff-line';
+    line.textContent = _floorFeedTexts[Math.floor(Math.random() * _floorFeedTexts.length)];
+    feed.prepend(line);
+    while (feed.children.length > 5) feed.removeChild(feed.lastChild);
+    requestAnimationFrame(() => line.classList.add('shown'));
+    a.altarPulse = 1;
+  }
+  a.altarPulse *= 0.92;
+  if (typeof altar !== 'undefined' && altar.children) {
+    altar.children.forEach(ch => {
+      if (ch.material && ch.material.emissiveIntensity !== undefined) {
+        ch.material.emissiveIntensity = 2.2 + a.altarPulse * 1.5;
+      }
+    });
+  }
+  if (now > a.nextGhost) {
+    a.nextGhost = now + 10000 + Math.random() * 5000;
+    if (typeof scanGroup !== 'undefined' && !isProcessing) {
+      scanGroup.visible = true;
+      setTimeout(() => { if (!isProcessing) scanGroup.visible = false; }, 1400);
+    }
+  }
+}
+
+// ───────── FORGE: figures + door resonance ─────────
+function _buildForgeActivity() {
+  const group = new THREE.Group();
+  interiors.forge.add(group);
+  const figCount = actCount(4);
+  const figs = [];
+  const zArr = (typeof FORGE_Z !== 'undefined') ? FORGE_Z : [-5, -10, -16, -22, -29];
+  for (let i = 0; i < figCount; i++) {
+    const fig = makeFigure();
+    const z = zArr[Math.floor(Math.random() * zArr.length)];
+    fig.position.set((Math.random() - 0.5) * 2, -1.0, z);
+    fig.userData.walk = (i === 0);
+    fig.userData.walkZ = z;
+    group.add(fig); figs.push(fig);
+  }
+  _act.forge = { group, figs, nextResonance: 0, resoDoor: -1, resoStart: 0 };
+  _activityUpdaters.push(_updateForgeActivity);
+}
+function _updateForgeActivity(now, t, dt) {
+  const a = _act.forge;
+  if (!a || !interiors.forge.visible) return;
+  const intensity = effectiveIntensity('forge');
+  const zArr = (typeof FORGE_Z !== 'undefined') ? FORGE_Z : [-5, -10, -16, -22, -29];
+  a.figs.forEach(fig => {
+    fig.userData.glow.material.opacity = 0.12 + 0.12 * intensity;
+    if (fig.userData.walk) {
+      fig.userData.walkZ -= dt * 1.2;
+      if (fig.userData.walkZ < -31) fig.userData.walkZ = 2;
+      fig.position.z = fig.userData.walkZ;
+    }
+  });
+  if (now > a.nextResonance) {
+    a.nextResonance = now + (30000 + Math.random() * 15000) / (0.5 + intensity);
+    a.resoDoor = Math.floor(Math.random() * zArr.length);
+    a.resoStart = now;
+    if (audioCtx && currentDistrict === 'forge') pluckTone(180, { through: 'echo', duration: 2.4, peak: 0.12 });
+  }
+  if (a.resoDoor >= 0 && forgeDoors[a.resoDoor]) {
+    const e = (now - a.resoStart) / 3000;
+    if (e < 1) {
+      const boost = Math.sin(e * Math.PI) * 1.2;
+      forgeDoors[a.resoDoor].children.forEach(ch => {
+        if (ch.material && ch.material.emissiveIntensity !== undefined) {
+          ch.material.emissiveIntensity = FORGE_DOORS[a.resoDoor].glow + boost;
+        }
+      });
+    } else { a.resoDoor = -1; }
+  }
+}
+
+// ───────── OBSERVATORY: simulated memory nodes (atop the real feed) ─────────
+function _buildObservatoryActivity() {
+  _act.observatory = { nextNode: 0, pulseFreq: 1.0 };
+  _activityUpdaters.push(_updateObservatoryActivity);
+}
+function _updateObservatoryActivity(now, t, dt) {
+  const a = _act.observatory;
+  if (!a || !interiors.observatory.visible) return;
+  const intensity = effectiveIntensity('observatory');
+  if (now > a.nextNode) {
+    a.nextNode = now + (10000 + Math.random() * 5000) / (0.5 + intensity);
+    const node = new THREE.Mesh(
+      new THREE.SphereGeometry(0.07, 8, 8),
+      new THREE.MeshStandardMaterial({ color: '#FFD27A', emissive: '#FFD27A', emissiveIntensity: 2.5, roughness: 0.3, transparent: true, opacity: 1 })
+    );
+    const ang = Math.random() * Math.PI * 2, r = 1 + Math.random() * 4, h = (Math.random() - 0.5) * 6;
+    node.position.set(Math.cos(ang) * r, h, Math.sin(ang) * r);
+    node.userData = { type: 'simNode', born: now };
+    constGroup.add(node);
+    a.pulseFreq = Math.min(2.5, a.pulseFreq + 0.15);
+  }
+  a.pulseFreq += (1.0 - a.pulseFreq) * 0.01;
+  constGroup.children.forEach(ch => {
+    if (ch.userData && ch.userData.type === 'simNode') {
+      const age = (now - ch.userData.born) / 1000;
+      ch.material.emissiveIntensity = 2.5 + Math.sin(now * 0.005 * a.pulseFreq) * 0.6;
+      if (age > 25) {
+        ch.material.opacity -= dt * 0.5;
+        if (ch.material.opacity <= 0) { constGroup.remove(ch); ch.geometry.dispose(); ch.material.dispose(); }
+      }
+    }
+  });
+}
+
+// ───────── COUNCIL: seated figures + table rings ─────────
+function _buildCouncilActivity() {
+  const group = new THREE.Group();
+  interiors.council.add(group);
+  const figCount = actCount(6);
+  const figs = [];
+  for (let i = 0; i < figCount; i++) {
+    const ang = (i / figCount) * Math.PI * 2;
+    const fig = makeFigure('#0d0a06', '#E8893A', 0.9);
+    fig.position.set(Math.cos(ang) * 3.2, -1.0, Math.sin(ang) * 3.2);
+    group.add(fig); figs.push(fig);
+  }
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.5, 0.6, 48),
+    new THREE.MeshBasicMaterial({ color: '#F5A623', transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = -0.45;
+  group.add(ring);
+  _act.council = { group, figs, ring, nextRing: 0, ringStart: 0 };
+  _activityUpdaters.push(_updateCouncilActivity);
+}
+function _updateCouncilActivity(now, t, dt) {
+  const a = _act.council;
+  if (!a || !interiors.council.visible) return;
+  const intensity = effectiveIntensity('council');
+  a.figs.forEach((fig) => {
+    fig.userData.glow.material.opacity = 0.1 + 0.1 * intensity + (Math.random() < 0.002 ? 0.3 : 0);
+  });
+  if (now > a.nextRing) {
+    a.nextRing = now + (30000 + Math.random() * 10000) / (0.5 + intensity);
+    a.ringStart = now;
+  }
+  const e = (now - a.ringStart) / 4000;
+  if (e < 1) {
+    a.ring.scale.setScalar(1 + e * 6);
+    a.ring.material.opacity = (1 - e) * 0.4;
+  } else {
+    a.ring.material.opacity = 0;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════════════
+const clk = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clk.getElapsedTime();
+  const dt = Math.min(clk.getDelta(), 0.1);
+  const now = performance.now();
+  controls.update();
+
+  updateActivity(now, t, dt);
+
+  // Presentation camera tween — explicit, time-based, guaranteed to move.
+  if (presentationTween) {
+    const elapsed = performance.now() - presentationTween.startTime;
+    const rawT = Math.min(elapsed / presentationTween.duration, 1);
+    const eased = easeInOutCubic(rawT);
+    camera.position.lerpVectors(presentationTween.fromPos, presentationTween.toPos, eased);
+    controls.target.lerpVectors(presentationTween.fromTarget, presentationTween.toTarget, eased);
+    controls.update();
+    if (rawT >= 1) presentationTween = null;
+  }
+
+  // Core pulse
+  const cp = 1 + Math.sin(t*1.8)*0.25;
+  coreLight.intensity = 15 + Math.sin(t*1.8)*6;
+  coreInner.intensity = 5 + Math.sin(t*2.3)*3;
+
+  // Galaxy group animations (only when visible)
+  if (galaxyGroup.visible) {
+    // District sprites pulse
+    galaxyGroup.children.forEach(child => {
+      if (child.isSprite && child.material.map === goldGlow) {
+        child.scale.setScalar(4.5 + Math.sin(t*1.4)*0.5);
+      }
+    });
+    // Zone orbits
+    districtClickables.forEach(obj => {
+      if (obj.userData.type==='zone' && obj.userData.orbitDist) {
+        const ud = obj.userData;
+        const a = ud.baseAngle + t * ud.orbitSpeed;
+        obj.position.x = ud.parentPos.x + Math.cos(a)*ud.orbitDist;
+        obj.position.z = ud.parentPos.z + Math.sin(a)*ud.orbitDist;
+        obj.position.y = ud.yBase + Math.sin(t*0.7+ud.baseAngle)*0.35;
+        if (ud.glowSprite) ud.glowSprite.position.copy(obj.position);
+      }
+    });
+    // Streams
+    streams.forEach(sd => {
+      const arr = sd.stream.geometry.attributes.position.array;
+      for (let i=0;i<sd.count;i++) {
+        const m = sd.meta[i];
+        m.t += m.speed*dt;
+        if (m.t>1) m.t-=1;
+        const pt = m.curve.getPoint(m.t);
+        arr[i*3]=pt.x; arr[i*3+1]=pt.y; arr[i*3+2]=pt.z;
+      }
+      sd.stream.geometry.attributes.position.needsUpdate = true;
+    });
+    // Ambient particles
+    const aArr = apMesh.geometry.attributes.position.array;
+    for (let i=0;i<apCount;i++) {
+      const m = apMeta[i];
+      const a = m.baseAngle + t*m.speed;
+      aArr[i*3]=Math.cos(a)*m.radius;
+      aArr[i*3+1]=m.baseH + Math.sin(t*0.5+m.phase)*m.vAmp;
+      aArr[i*3+2]=Math.sin(a)*m.radius;
+    }
+    apMesh.geometry.attributes.position.needsUpdate = true;
+    // Drifting haze
+    const hArr = hazeMesh.geometry.attributes.position.array;
+    for (let i=0;i<hazeCount;i++) {
+      const m = hazeMeta[i];
+      const a = m.baseAngle + t*m.speed;
+      hArr[i*3]=Math.cos(a)*m.radius;
+      hArr[i*3+1]=m.baseH + Math.sin(t*0.3+m.phase)*m.vAmp;
+      hArr[i*3+2]=Math.sin(a)*m.radius;
+    }
+    hazeMesh.geometry.attributes.position.needsUpdate = true;
+    // Nebula — deliberately slow, almost still
+    const nebArr = nebulaMesh.geometry.attributes.position.array;
+    for (let i=0;i<NEBULA_PARTICLE_COUNT;i++) {
+      const m = nebulaMeta[i];
+      nebArr[i*3]   = m.baseX + Math.sin(t*m.driftSpeed + m.phase)*0.6;
+      nebArr[i*3+1] = m.baseY + Math.cos(t*m.driftSpeed*0.7 + m.phase)*0.4;
+      nebArr[i*3+2] = m.baseZ + Math.sin(t*m.driftSpeed*0.5 + m.phase)*0.6;
+    }
+    nebulaMesh.geometry.attributes.position.needsUpdate = true;
+    // Pulse rings
+    pulseRings.forEach(ring => {
+      const ud = ring.userData;
+      const cy = (t*ud.speed + ud.phase) % (Math.PI*2);
+      ring.scale.setScalar(ud.base + (cy/(Math.PI*2))*(ud.max-ud.base));
+      ring.material.opacity = Math.max(0, 0.5*(1-cy/(Math.PI*2)));
+      ring.rotation.z += 0.004;
+    });
+  }
+
+  // Floor interior animations (when visible)
+  if (interiors.floor.visible) {
+    // Chamber particles
+    const cArr = cpMesh.geometry.attributes.position.array;
+    for (let i=0;i<cpCount;i++) {
+      const m = cpMetaArr[i];
+      const a = m.baseA + t*m.spd;
+      cArr[i*3]=Math.cos(a)*m.r;
+      cArr[i*3+1]=m.baseH + Math.sin(t*0.6+m.ph)*m.vAmp;
+      cArr[i*3+2]=Math.sin(a)*m.r;
+    }
+    cpMesh.geometry.attributes.position.needsUpdate = true;
+    cpMesh.rotation.y += dt*0.08;
+    circuitGroup.rotation.y += dt*0.04;
+    // Embers — rise, then wrap back to floor level
+    const emArr = emberMesh.geometry.attributes.position.array;
+    for (let i=0;i<emberCount;i++) {
+      const m = emberMeta[i];
+      let h = m.baseH + ((t*m.riseSpeed) % 5);
+      if (h > 1.6) h -= 5;
+      const a = m.baseA + Math.sin(t*0.3 + m.phase)*m.drift;
+      emArr[i*3]=Math.cos(a)*m.r;
+      emArr[i*3+1]=h;
+      emArr[i*3+2]=Math.sin(a)*m.r;
+    }
+    emberMesh.geometry.attributes.position.needsUpdate = true;
+    // Scan lines
+    if (scanGroup.visible) {
+      scanGroup.children.forEach(scan => {
+        const ud = scan.userData;
+        scan.position.y = ud.baseY + Math.sin(t*ud.speed+ud.phase)*2;
+        scan.material.opacity = 0.3 + Math.abs(Math.sin(t*ud.speed+ud.phase))*0.5;
+      });
+    }
+  }
+
+  // Observatory rotation
+  if (interiors.observatory.visible) {
+    interiors.observatory.children[0].rotation.y += dt*0.1;
+    maybeFetchConstellation();
+    const odArr = obsDustMesh.geometry.attributes.position.array;
+    for (let i=0;i<obsDustCount;i++) {
+      const m = obsDustMeta[i];
+      const a = m.baseA + t*m.speed;
+      odArr[i*3]=Math.cos(a)*m.r;
+      odArr[i*3+1]=m.baseH + Math.sin(t*0.2+m.phase)*0.6;
+      odArr[i*3+2]=Math.sin(a)*m.r;
+    }
+    obsDustMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Academy: pulsing pillars, rotating codex
+  if (interiors.academy.visible) {
+    codexGroup.rotation.y += dt*0.3;
+    codexGroup.position.y = 0.4 + Math.sin(t*0.8)*0.15;
+    pillarMeshes.forEach((p, i) => {
+      p.material.emissiveIntensity = p.userData.baseEmissive + Math.sin(t*1.6 + i*0.7)*0.6;
+    });
+    const acArr = acpMesh.geometry.attributes.position.array;
+    for (let i=0;i<acpCount;i++) {
+      const m = acpMetaArr[i];
+      const a = m.baseA + t*m.spd;
+      acArr[i*3]=Math.cos(a)*m.r;
+      acArr[i*3+1]=m.baseH + Math.sin(t*0.6+m.ph)*m.vAmp;
+      acArr[i*3+2]=Math.sin(a)*m.r;
+    }
+    acpMesh.geometry.attributes.position.needsUpdate = true;
+    const adArr = academyDustMesh.geometry.attributes.position.array;
+    for (let i=0;i<academyDustCount;i++) {
+      const m = academyDustMeta[i];
+      const a = m.baseA + t*m.speed;
+      adArr[i*3]=Math.cos(a)*m.r;
+      adArr[i*3+1]=m.baseH + Math.sin(t*0.3+m.phase)*0.5;
+      adArr[i*3+2]=Math.sin(a)*m.r;
+    }
+    academyDustMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Forge: pulsing doors, particle stream flowing the corridor
+  if (interiors.forge.visible) {
+    forgeDoors.forEach((g, i) => {
+      const d = FORGE_DOORS[i];
+      const pulse = d.glow + Math.sin(t*1.4 + i*0.5)*0.4;
+      g.children.forEach(child => {
+        if (child.material && child.material.emissiveIntensity !== undefined) child.material.emissiveIntensity = pulse;
+      });
+    });
+    const fsArr = forgeStream.geometry.attributes.position.array;
+    for (let i=0;i<forgeStreamCount;i++) {
+      const m = forgeStreamMeta[i];
+      m.t += m.speed*dt;
+      if (m.t > 1) m.t -= 1;
+      fsArr[i*3] = m.offsetX;
+      fsArr[i*3+1] = m.offsetY;
+      fsArr[i*3+2] = FORGE_START_Z + m.t*(FORGE_END_Z-FORGE_START_Z);
+    }
+    forgeStream.geometry.attributes.position.needsUpdate = true;
+    const mistArr = mistMesh.geometry.attributes.position.array;
+    for (let i=0;i<mistCount;i++) {
+      const m = mistMeta[i];
+      mistArr[i*3] = m.baseX + Math.sin(t*m.speed + m.phase)*0.5;
+      mistArr[i*3+2] = m.baseZ + Math.cos(t*m.speed*0.6 + m.phase)*0.8;
+    }
+    mistMesh.geometry.attributes.position.needsUpdate = true;
+    const fdArr = forgeDustMesh.geometry.attributes.position.array;
+    for (let i=0;i<forgeDustCount;i++) {
+      const m = forgeDustMeta[i];
+      fdArr[i*3] = m.baseX + Math.sin(t*m.speed + m.phase)*0.4;
+      fdArr[i*3+1] = m.baseY + Math.sin(t*0.25 + m.phase)*0.5;
+      fdArr[i*3+2] = m.baseZ;
+    }
+    forgeDustMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Threshold: light grows with proximity, burst particles flow toward it
+  if (interiors.threshold.visible) {
+    const lightWorld = interiors.threshold.position.clone().add(THRESHOLD_LIGHT_LOCAL);
+    const dist = camera.position.distanceTo(lightWorld);
+    const proximity = THREE.MathUtils.clamp(1 - dist / 60, 0, 1);
+    thresholdLight.scale.setScalar(1 + proximity * 4);
+    thresholdLightGlow.scale.setScalar(3 + proximity * 12);
+    thresholdLight.material.emissiveIntensity = 3 + proximity * 8;
+    updateThresholdAudio(proximity);
+
+    if (thresholdBurstActive) {
+      thresholdBurstT += dt / 3.0;
+      const arr = thresholdBurst.geometry.attributes.position.array;
+      for (let i=0;i<THRESHOLD_BURST_COUNT;i++) {
+        const lerped = thresholdBurstStart[i].clone().lerp(THRESHOLD_LIGHT_LOCAL, Math.min(thresholdBurstT, 1));
+        arr[i*3]=lerped.x; arr[i*3+1]=lerped.y; arr[i*3+2]=lerped.z;
+      }
+      thresholdBurst.geometry.attributes.position.needsUpdate = true;
+      thresholdBurstMat.opacity = thresholdBurstT < 0.85 ? 0.8 : Math.max(0, 0.8 * (1 - (thresholdBurstT - 0.85) / 0.15));
+      if (thresholdBurstT >= 1) { thresholdBurstActive = false; thresholdBurstMat.opacity = 0; }
+    }
+
+    const taArr = thresholdAmbientMesh.geometry.attributes.position.array;
+    for (let i=0;i<thresholdAmbientCount;i++) {
+      const m = thresholdAmbientMeta[i];
+      taArr[i*3]   = m.baseX + Math.sin(t*m.speed + m.phase)*0.5;
+      taArr[i*3+1] = m.baseY + Math.cos(t*m.speed*0.7 + m.phase)*0.4;
+      taArr[i*3+2] = m.baseZ;
+    }
+    thresholdAmbientMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Lounge: the wall rotates slowly around the camera, particles drift
+  if (interiors.lounge.visible) {
+    // Boosted during presentation: with the camera held static and no user
+    // parallax to help perceive a subtle rotation, the original speed read
+    // as "not rotating" during a brief automated dwell. Manual browsing is
+    // unchanged.
+    const loungeRotSpeed = PRESENTATION.active ? 0.13 : 0.035;
+    interiors.lounge.rotation.y += dt * loungeRotSpeed;
+    const lArr = lpMesh.geometry.attributes.position.array;
+    for (let i=0;i<lpCount;i++) {
+      const m = lpMetaArr[i];
+      const a = m.baseA + t*m.spd;
+      lArr[i*3]=Math.sin(a)*m.r;
+      lArr[i*3+1]=m.baseH + Math.sin(t*0.5+m.ph)*m.vAmp;
+      lArr[i*3+2]=-Math.cos(a)*m.r;
+    }
+    lpMesh.geometry.attributes.position.needsUpdate = true;
+    const ldArr = loungeDustMesh.geometry.attributes.position.array;
+    for (let i=0;i<loungeDustCount;i++) {
+      const m = loungeDustMeta[i];
+      const a = m.baseA + t*m.speed;
+      ldArr[i*3]=Math.sin(a)*m.r;
+      ldArr[i*3+1]=m.baseH + Math.sin(t*0.3+m.phase)*0.5;
+      ldArr[i*3+2]=-Math.cos(a)*m.r;
+    }
+    loungeDustMesh.geometry.attributes.position.needsUpdate = true;
+    loungeFigures.forEach(f => {
+      f.position.y = f.userData.baseY + Math.sin(t*f.userData.speed + f.userData.phase)*0.3;
+      if (f.userData.glowSprite) f.userData.glowSprite.position.copy(f.position);
+    });
+  }
+
+  // Council Chamber: quiet ambient presence — no interaction, just breathing motion
+  if (interiors.council.visible) {
+    councilVolumes.forEach(v => {
+      v.position.y = v.userData.baseY + Math.sin(t*0.6 + v.userData.phase)*0.08;
+    });
+    tableGlow.material.opacity = 0.5 + Math.sin(t*0.5)*0.1;
+    tableGlowOuter.material.opacity = 0.18 + Math.sin(t*0.4 + 1.2)*0.07;
+    const ccArr = ccpMesh.geometry.attributes.position.array;
+    for (let i=0;i<ccpCount;i++) {
+      const m = ccpMetaArr[i];
+      const a = m.baseA + t*m.spd;
+      ccArr[i*3]=Math.cos(a)*m.r;
+      ccArr[i*3+1]=m.baseH + Math.sin(t*0.5+m.ph)*m.vAmp;
+      ccArr[i*3+2]=Math.sin(a)*m.r;
+    }
+    ccpMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  stars.rotation.y += 0.00006;
+  renderer.render(scene, camera);
+}
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Keyboard shortcuts (1-7 for districts, 0 for galaxy, P/Esc for Presentation Mode)
+window.addEventListener('keydown', e => {
+  if (e.key === 'p' || e.key === 'P') {
+    startPresentation();
+    return;
+  }
+  if (e.key === 'Escape') {
+    stopPresentation();
+    return;
+  }
+  if (e.key >= '1' && e.key <= '7') {
+    const d = districts[parseInt(e.key)-1];
+    navigateTo(d.id);
+  } else if (e.key === '0') {
+    navigateTo('galaxy');
+  }
+});
+
+// Start
+_initTicker();
+buildActivity();          // construct all district ambient pieces once
+updateActivityTickerVisibility();
+animate();
+console.log('HumbliFX Galaxy LIVE — unified institution');
+console.log('   Districts: 7 of 7 realized — Floor, Academy, Forge, Threshold, Lounge, Observatory, Council');
+console.log('   Click district to enter · Back button to return');
+console.log('   Keys 1-7 to jump · 0 for galaxy overview');
+</script>
+</body>
+</html>
