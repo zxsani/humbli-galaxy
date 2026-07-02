@@ -564,11 +564,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // ═══════════════════════════════════════════════
 const CONFIG = {
   // Your Railway backend's base URL. No trailing slash.
-  BACKEND_URL: "https://web-production-5ae91.up.railway.app",
+  BACKEND_URL: "https://your-service.up.railway.app",
 
   // From the Clerk dashboard → API Keys. This gets injected into the Clerk
   // script tag below at load time — it's the only place you need to set it.
-  CLERK_PUBLISHABLE_KEY: "pk_test_YnVyc3RpbmctcmFwdG9yLTMzLmNsZXJrLmFjY291bnRzLmRldiQ",
+  CLERK_PUBLISHABLE_KEY: "pk_live_REPLACE_ME",
 
   // The Lounge embeds your Tribe community in a side panel. Leave this
   // empty to keep the panel hidden entirely (no broken/empty iframe shown).
@@ -926,8 +926,8 @@ const AUDIO_PROFILES = {
                  accents: () => pluckTone(220, { through:'echo', duration:2.2, peak:0.14 }), accentEvery:[4500,7000] },
   threshold:   { drone:42, lfoRate:0.08, lfoDepth:0.10, shimmer:0.10, choir:0, silentUntilProximity:true },
   lounge:      { drone:48, lfoRate:0.12, lfoDepth:0.08, shimmer:0.12, choir:0.08 },
-  observatory: { drone:38, lfoRate:0.06, lfoDepth:0.12, shimmer:0.10, choir:0,
-                 accents: () => pluckTone(1760, { duration:2.0, peak:0.07 }), accentEvery:[7000,13000] },
+  observatory: { drone:38, lfoRate:0.06, lfoDepth:0.12, shimmer:0.02, choir:0,
+                 accents: () => pluckTone(660, { duration:1.4, peak:0.035 }), accentEvery:[12000,20000] },
   council:     { drone:36, lfoRate:0.06, lfoDepth:0.08, shimmer:0.05, choir:0,
                  accents: () => pluckTone(523, { duration:2.4, peak:0.09 }), accentEvery:[6000,10000] },
 };
@@ -2576,10 +2576,63 @@ backBtn.addEventListener('click', () => navigateTo('galaxy'));
 
 // Sign-in button — opens Clerk's modal. stopPropagation so the click can't
 // fall through to the canvas/district raycaster underneath it.
-document.getElementById('signInBtn').addEventListener('click', async (e) => {
-  e.stopPropagation();
+// Sign-in — hardened for live Clerk. Root cause of "button does nothing" AND
+// the raw "Clerk was not loaded with UI components" error was the same:
+// Clerk.load() can fail or lag on a first visit, leaving window.Clerk present
+// but unloaded, so openSignIn() throws. ensureClerkLoaded() retries load();
+// safeOpenSignIn() never lets a raw Clerk error escape to the member.
+async function ensureClerkLoaded() {
   await clerkReady;
-  if (window.Clerk) window.Clerk.openSignIn();
+  if (!window.Clerk) return false;
+  if (window.Clerk.loaded) return true;
+  try {
+    await window.Clerk.load();
+    window.Clerk.addListener(handleClerkState);
+    await handleClerkState();
+    return !!window.Clerk.loaded;
+  } catch (_) {
+    return false;
+  }
+}
+async function safeOpenSignIn() {
+  const ready = await ensureClerkLoaded();
+  if (!ready) return false;
+  try { window.Clerk.openSignIn(); return true; } catch (_) { return false; }
+}
+
+let _signInBusy = false;
+async function handleSignInPress(e) {
+  e.stopPropagation();
+  if (e.type === 'touchend' && e.cancelable) e.preventDefault(); // stop the synthetic click double-fire
+  if (_signInBusy) return;
+  _signInBusy = true;
+  const btn = document.getElementById('signInBtn');
+  const original = btn.textContent;
+  try {
+    const opened = await safeOpenSignIn();
+    if (!opened) {
+      btn.textContent = 'Sign-in is waking — tap again in a moment';
+      setTimeout(() => { btn.textContent = original; }, 2600);
+    }
+  } finally {
+    setTimeout(() => { _signInBusy = false; }, 600);
+  }
+}
+document.getElementById('signInBtn').addEventListener('click', handleSignInPress);
+document.getElementById('signInBtn').addEventListener('touchend', handleSignInPress);
+
+// Audio must never keep ringing when the app is backgrounded: hard-mute the
+// master bus the moment the page hides, restore the exact prior level on return.
+let _preHideGain = null;
+document.addEventListener('visibilitychange', () => {
+  if (!audioCtx || !masterGain) return;
+  if (document.hidden) {
+    _preHideGain = masterGain.gain.value;
+    rampGain(masterGain, 0, 0.2);
+  } else if (_preHideGain !== null) {
+    rampGain(masterGain, _preHideGain, 0.6);
+    _preHideGain = null;
+  }
 });
 
 // ═══════════════════════════════════════════════
@@ -2681,14 +2734,48 @@ async function submitQuestion() {
   askBtn.disabled = true;
   askBtn.textContent = 'Considering…';
   try {
+    // Signed out? Say so specifically (and open sign-in) — not a generic
+    // reflection message that hides the real cause.
+    await clerkReady;
+    if (!window.Clerk || !window.Clerk.session) {
+      showPillar({
+        kicker: 'The Brain',
+        name: 'Sign In to Ask',
+        text: 'The Brain answers those it knows. Sign in, then ask again.',
+      });
+      safeOpenSignIn();
+      return;
+    }
     const token = await getSessionToken();
-    if (!token) throw new Error('no-token');
-    const res = await fetch(`${CONFIG.BACKEND_URL}/question`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q }),
-    });
-    if (!res.ok) throw new Error('bad-status');
+    let res;
+    try {
+      res = await fetch(`${CONFIG.BACKEND_URL}/question`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+    } catch (netErr) {
+      // Network / CORS failure — the request never reached the Brain at all.
+      console.error('[question] network failure:', netErr);
+      showPillar({
+        kicker: 'The Brain',
+        name: 'The Brain Is Unreachable',
+        text: `This page could not reach the Brain (network or CORS). Detail: ${netErr && netErr.message ? netErr.message : 'failed to fetch'}`,
+      });
+      return;
+    }
+    if (!res.ok) {
+      // The Brain answered with an error — surface the real status + detail.
+      let detail = '';
+      try { const j = await res.json(); detail = j.detail || ''; } catch (_) {}
+      console.error('[question] backend error', res.status, detail);
+      showPillar({
+        kicker: 'The Brain',
+        name: 'The Brain Could Not Answer',
+        text: `The Brain returned an error (HTTP ${res.status})${detail ? ': ' + detail : '.'}`,
+      });
+      return;
+    }
     const data = await res.json();
     // Show the answer in the same overlay style as a pillar.
     showPillar({
@@ -2699,12 +2786,12 @@ async function submitQuestion() {
     askInput.value = '';
     // Speak the answer if voice is enabled — same graceful path as chart analysis.
     if (data.answer) speakText(data.answer);
-  } catch (_) {
-    // Any failure → a calm, in-voice message; never a raw error.
+  } catch (err) {
+    console.error('[question] unexpected failure:', err);
     showPillar({
       kicker: 'The Brain',
       name: 'The Brain Is in Reflection',
-      text: 'The Brain could not answer just now. Ask again in a moment.',
+      text: `Something interrupted the question. Detail: ${err && err.message ? err.message : 'unknown'}`,
     });
   } finally {
     askBtn.disabled = false;
@@ -2972,7 +3059,9 @@ async function getSessionToken() {
     throw new Error('The Brain is in reflection. Offer your chart again in a moment.');
   }
   if (!window.Clerk.session) {
-    window.Clerk.openSignIn();
+    // safeOpenSignIn retries a failed Clerk load and swallows any raw Clerk
+    // throw — the member only ever sees the calm line below.
+    safeOpenSignIn();
     throw new Error('Sign in to offer your chart to the Brain.');
   }
   try {
@@ -3053,7 +3142,7 @@ function hideConfidenceBadge() {
   document.getElementById('confidenceBadge').style.display = 'none';
 }
 
-function processChart(file) {
+async function processChart(file) {
   if (isProcessing || currentDistrict !== 'floor') return;
 
   if (!file.type.startsWith('image/')) {
@@ -3062,6 +3151,16 @@ function processChart(file) {
   }
   if (file.size > 10 * 1024 * 1024) {
     failRitual('That image is too large. Offer a smaller file.');
+    return;
+  }
+
+  // Never begin the ritual for a signed-out member. The old flow started
+  // scanning first and hit Clerk mid-ritual — that was the "glitch" plus the
+  // raw error. Check the session up front instead.
+  await clerkReady;
+  if (!window.Clerk || !window.Clerk.session) {
+    failRitual('Sign in to offer your chart to the Brain.');
+    safeOpenSignIn();
     return;
   }
 
