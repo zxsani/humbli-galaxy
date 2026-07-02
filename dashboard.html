@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>HumbliFX &mdash; Member Dashboard</title>
+<style>
+  :root {
+    /* Aligned to the master galaxy file's palette (was #060810). */
+    --navy: #04060c; --gold: #F5A623; --amber: #E8893A;
+    --text: #E8E8F0; --muted: #6B7280; --card-bg: rgba(255,255,255,0.03);
+    --border: rgba(245,166,35,0.15);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--navy); color: var(--text);
+    font-family: 'Georgia', 'Times New Roman', serif; min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .topbar {
+    background: rgba(10,14,26,0.9); border-bottom: 1px solid var(--border);
+    padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px);
+  }
+  .logo { font-size: 18px; color: var(--gold); letter-spacing: 0.1em; font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .user-name { font-size: 13px; color: var(--text); }
+  .signout-link {
+    font-size: 11px; color: var(--muted); background: transparent; border: none;
+    cursor: pointer; font-family: 'Georgia', serif; letter-spacing: 0.04em; text-decoration: underline;
+  }
+  .signout-link:hover { color: var(--gold); }
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px 40px; display: flex; flex-direction: column; gap: 20px; }
+  .preview-banner {
+    background: rgba(245,166,35,0.08); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; text-align: center; font-size: 12px; color: var(--amber); letter-spacing: 0.04em;
+  }
+  .welcome-card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 24px; text-align: center;
+  }
+  .rank-badge {
+    display: inline-block; padding: 4px 14px; border-radius: 20px;
+    font-size: 11px; letter-spacing: 0.1em; font-weight: 600; margin-bottom: 10px;
+  }
+  /* Rank badge colors aligned to the master file's canonical RANK_COLOR. */
+  .rank-Initiate { background: rgba(232,137,58,0.18); color: #E8893A; }
+  .rank-Student { background: rgba(240,168,74,0.20); color: #F0A84A; }
+  .rank-Practitioner { background: rgba(245,166,35,0.22); color: #F5A623; }
+  .rank-Adept { background: rgba(255,215,0,0.22); color: #FFD700; }
+  .rank-Sovereign { background: rgba(255,253,232,0.22); color: #FFFDE8; }
+  .welcome-card h2 { font-size: 22px; color: var(--gold); letter-spacing: 0.04em; margin-bottom: 6px; }
+  .member-since { font-size: 12px; color: var(--muted); letter-spacing: 0.06em; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .stat-card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 16px; text-align: center;
+  }
+  .stat-number { font-size: 28px; color: var(--gold); letter-spacing: 0.02em; display: block; }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
+  .actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .action-card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px 18px; text-align: center; cursor: pointer;
+    transition: border-color 0.3s, box-shadow 0.3s; text-decoration: none; color: inherit; display: block;
+    min-height: 48px;
+  }
+  .action-card:hover, .action-card:active { border-color: var(--gold); box-shadow: 0 0 30px rgba(245,166,35,0.08); }
+  .action-icon { font-size: 36px; display: block; margin-bottom: 8px; }
+  .action-title { font-size: 16px; color: var(--gold); letter-spacing: 0.06em; margin-bottom: 4px; }
+  .action-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+  .section-title { font-size: 14px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+  .recent-list { display: flex; flex-direction: column; gap: 8px; }
+  .recent-item {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .brain-panel {
+    background: linear-gradient(135deg, rgba(245,166,35,0.06), rgba(232,137,58,0.03));
+    border: 1px solid rgba(245,166,35,0.28); border-radius: 14px;
+    padding: 22px 22px; box-shadow: 0 0 34px rgba(245,166,35,0.08);
+  }
+  .brain-panel-title {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 14px;
+  }
+  .brain-insight { display: flex; flex-direction: column; gap: 12px; }
+  .brain-insight .line {
+    font-size: 14px; line-height: 1.6; color: var(--text);
+    padding-left: 14px; border-left: 2px solid rgba(245,166,35,0.4);
+  }
+  .brain-signals { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .brain-signals .chip {
+    font-size: 11px; letter-spacing: 0.03em; color: var(--muted);
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px;
+  }
+  .brain-signals .chip strong { color: var(--gold); font-weight: 600; }
+  .recent-date { font-size: 11px; color: var(--muted); }
+  .recent-insight { font-size: 13px; color: var(--text); flex: 1; margin: 0 12px; }
+  .recent-score { font-size: 12px; color: var(--gold); font-weight: 600; }
+  .empty-state { text-align: center; padding: 20px; color: var(--muted); font-size: 13px; font-style: italic; }
+
+  .signin-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--navy); z-index: 100; }
+  .signin-card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px;
+    padding: 40px 28px; text-align: center; max-width: 380px; width: 90%;
+  }
+  .signin-logo { font-size: 28px; color: var(--gold); letter-spacing: 0.1em; margin-bottom: 16px; display: block; }
+  .signin-card p { font-size: 14px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+  .signin-card button {
+    background: transparent; border: 2px solid var(--gold); color: var(--gold);
+    padding: 14px 28px; border-radius: 10px; font-size: 15px; cursor: pointer;
+    font-family: 'Georgia', serif; letter-spacing: 0.06em; margin: 6px; transition: background 0.3s;
+    min-height: 48px; min-width: 200px;
+  }
+  .signin-card button:hover { background: rgba(245,166,35,0.1); }
+  .signin-card button.secondary { border-color: var(--border); color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 600px) {
+    .container { padding: 16px 10px 32px; gap: 14px; }
+    .welcome-card { padding: 20px 16px; }
+    .welcome-card h2 { font-size: 18px; }
+    .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-card { padding: 14px 10px; }
+    .stat-number { font-size: 22px; }
+    .actions-row { grid-template-columns: 1fr; }
+    .topbar { padding: 10px 14px; }
+    .logo { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="signin-overlay" id="signinOverlay">
+  <div class="signin-card">
+    <span class="signin-logo">HUMBLIFX</span>
+    <p id="signinMessage">Enter the Institution</p>
+    <button id="signinBtn">Sign In</button>
+    <button id="testModeBtn" class="secondary">Preview Dashboard</button>
+  </div>
+</div>
+
+<div class="topbar" id="topbar" style="display:none;">
+  <span class="logo">HUMBLIFX</span>
+  <div class="topbar-right">
+    <span class="user-name" id="userName"></span>
+    <button class="signout-link" id="signoutBtn" style="display:none;">Sign out</button>
+  </div>
+</div>
+
+<div class="container" id="dashboard" style="display:none;">
+  <div class="preview-banner" id="previewBanner" style="display:none;">Preview mode &mdash; sample data shown. Sign in to see your real progress.</div>
+  <div class="welcome-card">
+    <span class="rank-badge" id="rankBadge"></span>
+    <h2 id="greeting"></h2>
+    <span class="member-since" id="memberSince"></span>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><span class="stat-number" id="chartsOffered">0</span><span class="stat-label">Charts Offered</span></div>
+    <div class="stat-card"><span class="stat-number" id="principlesLinked">0</span><span class="stat-label">Doctrine Links</span></div>
+    <div class="stat-card"><span class="stat-number" id="currentStreak">0</span><span class="stat-label">Day Streak</span></div>
+    <div class="stat-card"><span class="stat-number" id="communityRank">&mdash;</span><span class="stat-label">Institution Rank</span></div>
+  </div>
+  <div class="actions-row">
+    <a class="action-card" id="enterInstitution">
+      <span class="action-icon">&#x1F30C;</span>
+      <span class="action-title">Enter the Institution</span>
+      <span class="action-sub">The 3D Galaxy awaits</span>
+    </a>
+    <a class="action-card" target="_blank" rel="noopener" id="communityLink">
+      <span class="action-icon">&#x1F3DB;&#xFE0F;</span>
+      <span class="action-title">The Gathering Hall</span>
+      <span class="action-sub">Forums & community</span>
+    </a>
+  </div>
+  <div class="brain-panel" id="brainPanel" style="display:none;">
+    <div class="brain-panel-title">The Brain Sees</div>
+    <div class="brain-insight" id="brainInsight"></div>
+    <div class="brain-signals" id="brainSignals"></div>
+  </div>
+  <div class="section-title">Recent Offerings</div>
+  <div class="recent-list" id="recentList"><div class="empty-state">No charts offered yet. Enter the Institution to begin.</div></div>
+</div>
+
+<script>
+// ===============================================
+// CONFIG -- the only values you edit to deploy.
+// ===============================================
+const CONFIG = {
+  // From the Clerk dashboard -> API Keys. This is the SINGLE source of the
+  // key -- it is injected into the Clerk script tag at load (below). There is
+  // no separate <script data-clerk-publishable-key> tag to keep in sync.
+  CLERK_PUBLISHABLE_KEY: 'pk_test_YnVyc3RpbmctcmFwdG9yLTMzLmNsZXJrLmFjY291bnRzLmRldiQ',
+  // The Railway backend base URL (same one the galaxy uses). No trailing slash.
+  BACKEND_URL: 'https://web-production-5ae91.up.railway.app',
+  // The deployed 3D galaxy master file.
+  INSTITUTION_URL: 'https://zxsani.github.io/humbli-galaxy/humblifx-galaxy.html',
+  // The Tribe / community space. Leave as-is if not yet set.
+  COMMUNITY_URL: 'https://community.humbli.fx',
+};
+
+const RANKS = ['Initiate', 'Student', 'Practitioner', 'Adept', 'Sovereign'];
+
+// The 8 doctrine principle names, for turning a principle_number from the
+// backend into readable text. Index 0 unused (principles are 1-8).
+const PRINCIPLE_NAMES = [
+  '', 'Structure Before Opinion', 'Patience as Edge', 'Structure as Language',
+  'The Market Remembers', 'Position as Conviction', 'Simplicity as Mastery',
+  'The Cycle Never Lies', 'Transformation Through Pressure',
+];
+
+// Sample data used ONLY in Preview mode. Real members get live data from the
+// backend's /me endpoint; if they've never offered a chart, they see honest
+// zeros (not these numbers).
+const PREVIEW_STATS = {
+  chartsOffered: 12,
+  recent: [
+    { when: 'Today', insight: 'Structure identified \u2014 compression before expansion', score: 84 },
+    { when: 'Yesterday', insight: 'Patience confirmed \u2014 waited for the retest', score: 79 },
+    { when: '3 days ago', insight: 'Doctrine link: Principle 4 \u2014 The Market Remembers', score: 88 },
+  ],
+};
+
+// -- DOM refs --
+const signinOverlay = document.getElementById('signinOverlay');
+const signinBtn = document.getElementById('signinBtn');
+const testModeBtn = document.getElementById('testModeBtn');
+const signinMessage = document.getElementById('signinMessage');
+const topbar = document.getElementById('topbar');
+const dashboard = document.getElementById('dashboard');
+const userName = document.getElementById('userName');
+const signoutBtn = document.getElementById('signoutBtn');
+const previewBanner = document.getElementById('previewBanner');
+const rankBadge = document.getElementById('rankBadge');
+const greeting = document.getElementById('greeting');
+const memberSince = document.getElementById('memberSince');
+const chartsOfferedEl = document.getElementById('chartsOffered');
+const principlesLinkedEl = document.getElementById('principlesLinked');
+const currentStreakEl = document.getElementById('currentStreak');
+const communityRankEl = document.getElementById('communityRank');
+const recentList = document.getElementById('recentList');
+const brainPanel = document.getElementById('brainPanel');
+const brainInsight = document.getElementById('brainInsight');
+const brainSignals = document.getElementById('brainSignals');
+const enterInstitution = document.getElementById('enterInstitution');
+const communityLink = document.getElementById('communityLink');
+
+// Links are static -- set them once, immediately.
+enterInstitution.href = CONFIG.INSTITUTION_URL;
+communityLink.href = CONFIG.COMMUNITY_URL;
+
+// -- Clerk: load dynamically from the single CONFIG key, with a real
+// readiness gate and full auth-state handling (loading / signed-in /
+// signed-out / error). Mirrors the proven pattern in the master file. --
+let _clerkResolve;
+const clerkReady = new Promise(res => { _clerkResolve = res; });
+
+(function loadClerk() {
+  const s = document.createElement('script');
+  s.async = true;
+  s.crossOrigin = 'anonymous';
+  s.setAttribute('data-clerk-publishable-key', CONFIG.CLERK_PUBLISHABLE_KEY);
+  s.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
+  s.addEventListener('load', async () => {
+    try {
+      await window.Clerk.load();
+      window.Clerk.addListener(handleClerkState);
+      handleClerkState();
+    } catch (err) {
+      signinMessage.textContent = 'Sign-in is resting. Use Preview, or try again shortly.';
+    }
+    _clerkResolve();
+  });
+  s.addEventListener('error', () => {
+    signinMessage.textContent = 'Sign-in could not load. Use Preview, or try again shortly.';
+    _clerkResolve();
+  });
+  document.head.appendChild(s);
+})();
+
+// One handler keeps the UI in sync for the life of the page: shows the
+// dashboard when signed in, returns to the overlay when signed out.
+let _inPreview = false;
+function handleClerkState() {
+  if (_inPreview) return; // preview overrides live state until reload
+  if (window.Clerk && window.Clerk.user) {
+    showDashboard(window.Clerk.user, false);
+  } else {
+    showSignIn();
+  }
+}
+
+signinBtn.addEventListener('click', async () => {
+  await clerkReady;
+  if (window.Clerk) window.Clerk.openSignIn();
+  else signinMessage.textContent = 'Sign-in is still loading \u2014 one moment.';
+});
+
+signoutBtn.addEventListener('click', async () => {
+  await clerkReady;
+  if (window.Clerk) { try { await window.Clerk.signOut(); } catch (_) {} }
+  showSignIn();
+});
+
+testModeBtn.addEventListener('click', () => {
+  _inPreview = true;
+  showDashboard({ firstName: 'Test Member', createdAt: new Date('2024-01-15').toISOString() }, true);
+});
+
+function showSignIn() {
+  signinOverlay.style.display = 'flex';
+  topbar.style.display = 'none';
+  dashboard.style.display = 'none';
+}
+
+// rankForCharts: deterministic, threshold-based. (Real stats would come from
+// the backend; preview uses PREVIEW_STATS.)
+function rankForCharts(n) {
+  if (n >= 100) return 4;
+  if (n >= 50) return 3;
+  if (n >= 20) return 2;
+  if (n >= 5) return 1;
+  return 0;
+}
+
+async function showDashboard(user, isPreview) {
+  signinOverlay.style.display = 'none';
+  topbar.style.display = 'flex';
+  dashboard.style.display = 'flex';
+  previewBanner.style.display = isPreview ? '' : 'none';
+  signoutBtn.style.display = isPreview ? 'none' : '';
+
+  const name = user.firstName || user.username || 'Member';
+  userName.textContent = name;
+  greeting.textContent = 'Welcome, ' + name;
+
+  // "Member since" always comes from Clerk (the true account-creation date).
+  // The backend doesn't store sign-up date and never fabricates one.
+  const joinDate = user.createdAt ? new Date(user.createdAt) : null;
+  memberSince.textContent = (joinDate && !isNaN(joinDate))
+    ? 'Member since ' + joinDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : '';
+
+  if (isPreview) {
+    renderStats(PREVIEW_STATS.chartsOffered, PREVIEW_STATS.recent, '#128', 6);
+    renderBrainPanel(
+      [
+        'Your reads are growing clearer. The Brain is more certain of your recent charts than your early ones \u2014 structure is becoming language to you.',
+        'You do not only bring clean, trending charts. You bring the ranging and the transitioning \u2014 the states where most look away. This is the patience the doctrine asks for.',
+      ],
+      { charts: 12, distinct_principles: 6, cadence: 'steady' },
+      0.78
+    );
+    return;
+  }
+
+  // Real member: fetch live stats from the backend. Show honest zeros first,
+  // then fill in when /me responds. If it fails, the zeros stand (no error
+  // thrown at the member).
+  renderStats(0, [], '\u2014', 0);
+  brainPanel.style.display = 'none';
+  try {
+    const token = await getRealToken();
+    if (!token) return;
+    const res = await fetch(`${CONFIG.BACKEND_URL}/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return; // leave the honest zeros in place
+    const data = await res.json();
+    const recent = (data.recent_insights || []).map(ri => ({
+      when: formatWhen(ri.created_at),
+      insight: ri.principle_number
+        ? `Principle ${ri.principle_number} \u2014 ${PRINCIPLE_NAMES[ri.principle_number] || ''}`.trim()
+        : (ri.lesson_summary || 'Chart offered'),
+      score: null, // the backend doesn't expose a per-chart score; omit rather than invent
+    }));
+    renderStats(data.charts_offered || 0, recent, '\u2014', null, data.current_rank);
+    renderBrainPanel(data.trajectory_insight, data.trajectory, data.average_confidence);
+  } catch (_) {
+    // Network/auth failure -- the zeros already shown are fine. Never surface a raw error.
+  }
+}
+
+// Renders the Brain's trajectory read: its spoken insight lines, plus a few
+// factual signal chips drawn straight from the trajectory numbers.
+function renderBrainPanel(insightLines, traj, avgConfidence) {
+  if (!Array.isArray(insightLines) || insightLines.length === 0) {
+    brainPanel.style.display = 'none';
+    return;
+  }
+  brainPanel.style.display = '';
+  brainInsight.innerHTML = insightLines
+    .map(line => `<div class="line">${escapeHtml(line)}</div>`)
+    .join('');
+
+  const chips = [];
+  if (traj && typeof traj.charts === 'number') chips.push(`<span class="chip"><strong>${traj.charts}</strong> charts read</span>`);
+  if (traj && traj.distinct_principles) chips.push(`<span class="chip"><strong>${traj.distinct_principles}</strong>/8 principles engaged</span>`);
+  if (typeof avgConfidence === 'number') chips.push(`<span class="chip">avg clarity <strong>${Math.round(avgConfidence * 100)}%</strong></span>`);
+  if (traj && traj.cadence) chips.push(`<span class="chip">${escapeHtml(traj.cadence)}</span>`);
+  brainSignals.innerHTML = chips.join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    { '&': '&', '<': '<', '>': '>', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+// Returns a real Clerk token, or null if unavailable (without opening a modal --
+// the member is already signed in here).
+async function getRealToken() {
+  await clerkReady;
+  try {
+    if (window.Clerk && window.Clerk.session) return await window.Clerk.session.getToken();
+  } catch (_) {}
+  return null;
+}
+
+function formatWhen(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Renders the stat cards and recent list. rankOverride (from /me) wins when
+// provided; otherwise rank is derived from the chart count locally.
+function renderStats(charts, recent, institutionRank, streak, rankOverride) {
+  const rank = rankOverride || RANKS[rankForCharts(charts)];
+  rankBadge.textContent = rank;
+  rankBadge.className = 'rank-badge rank-' + rank;
+
+  chartsOfferedEl.textContent = charts;
+  principlesLinkedEl.textContent = Math.floor(charts * 0.7);
+  currentStreakEl.textContent = (streak === null || streak === undefined) ? '\u2014' : streak;
+  communityRankEl.textContent = institutionRank;
+
+  if (recent && recent.length > 0) {
+    recentList.innerHTML = recent.map(r => `
+      <div class="recent-item">
+        <span class="recent-date">${r.when}</span>
+        <span class="recent-insight">${r.insight}</span>
+        ${r.score !== null && r.score !== undefined ? `<span class="recent-score">${r.score}</span>` : ''}
+      </div>
+    `).join('');
+  } else {
+    recentList.innerHTML = '<div class="empty-state">No charts offered yet. Enter the Institution to begin.</div>';
+  }
+}
+
+// Start at the sign-in overlay; Clerk's listener will advance the UI when ready.
+showSignIn();
+</script>
+</body>
+</html>
